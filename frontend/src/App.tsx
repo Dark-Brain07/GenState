@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   HelpCircle,
   XCircle,
+  X,
   Copy,
   PlusCircle,
   Lock,
@@ -47,10 +48,12 @@ export function App() {
   const [filterPolicy, setFilterPolicy] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
 
-  // Wallet State
-  const [walletConnected, setWalletConnected] = useState(true);
+  // Wallet State - Starts DISCONNECTED by default
+  const [walletConnected, setWalletConnected] = useState<boolean>(false);
   const [walletAddress, setWalletAddress] = useState<string>('');
-  const [walletBalance, setWalletBalance] = useState('0.0000 GEN');
+  const [walletBalance, setWalletBalance] = useState<string>('0.0000 GEN');
+  const [showWalletModal, setShowWalletModal] = useState<boolean>(false);
+  const [connectingWallet, setConnectingWallet] = useState<boolean>(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
 
   // Declare Form State
@@ -81,11 +84,13 @@ export function App() {
     if (!silent) setLoading(true);
     setRefreshing(true);
     try {
-      const addr = genStateService.getAccountAddress();
-      setWalletAddress(addr);
-
-      const bal = await genStateService.ensureBalance();
-      setWalletBalance(bal);
+      if (genStateService.isConnected()) {
+        const addr = genStateService.getAccountAddress();
+        setWalletAddress(addr);
+        const bal = await genStateService.ensureBalance();
+        setWalletBalance(bal);
+        setWalletConnected(true);
+      }
 
       const [protocolStats, claimsList] = await Promise.all([
         genStateService.fetchProtocolStats(),
@@ -138,14 +143,26 @@ export function App() {
     setTimeout(() => setCopyFeedback(false), 2000);
   };
 
-  const handleConnectWallet = async () => {
-    if (walletConnected) {
-      setWalletConnected(false);
-    } else {
+  const handleConnect = async (type: 'studionet' | 'browser') => {
+    setConnectingWallet(true);
+    try {
+      const res = await genStateService.connectWallet(type);
+      setWalletAddress(res.address);
+      setWalletBalance(res.balance);
       setWalletConnected(true);
-      const bal = await genStateService.ensureBalance();
-      setWalletBalance(bal);
+      setShowWalletModal(false);
+    } catch (err: any) {
+      alert(`Wallet connection failed: ${err.message || err}`);
+    } finally {
+      setConnectingWallet(false);
     }
+  };
+
+  const handleDisconnect = () => {
+    genStateService.disconnectWallet();
+    setWalletConnected(false);
+    setWalletAddress('');
+    setWalletBalance('0.0000 GEN');
   };
 
   // Real On-Chain Declare Handler
@@ -296,17 +313,36 @@ export function App() {
               <span>Explorer</span>
             </a>
 
-            <button
-              onClick={handleConnectWallet}
-              className={`wallet-btn ${walletConnected ? 'connected' : ''}`}
-            >
-              <Wallet size={16} />
-              <span>
-                {walletConnected
-                  ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)} (${walletBalance})`
-                  : 'Connect Wallet'}
-              </span>
-            </button>
+            {walletConnected ? (
+              <div className="wallet-group">
+                <div className="wallet-pill-connected">
+                  <span className="status-dot"></span>
+                  <span>
+                    {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                  </span>
+                  <span style={{ color: '#38bdf8', fontSize: '11px', marginLeft: '4px' }}>
+                    ({walletBalance})
+                  </span>
+                </div>
+                <button
+                  id="btn-disconnect-wallet"
+                  onClick={handleDisconnect}
+                  className="disconnect-btn"
+                  title="Disconnect active wallet"
+                >
+                  Disconnect
+                </button>
+              </div>
+            ) : (
+              <button
+                id="btn-connect-wallet"
+                onClick={() => setShowWalletModal(true)}
+                className="wallet-btn connect-glow"
+              >
+                <Wallet size={16} />
+                <span>Connect Wallet</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -700,129 +736,152 @@ export function App() {
               </div>
             )}
 
-            <form onSubmit={handleDeclareSubmit}>
-              <div className="form-group">
-                <label className="form-label">Domain Category</label>
-                <select
-                  id="select-declare-type"
-                  className="form-select"
-                  value={newClaimType}
-                  onChange={(e) => setNewClaimType(e.target.value as ClaimType)}
+            {!walletConnected ? (
+              <div className="wallet-required-banner">
+                <div className="wallet-required-icon">
+                  <Lock size={28} />
+                </div>
+                <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#f8fafc', marginBottom: '8px' }}>
+                  Wallet Connection Required
+                </h3>
+                <p style={{ fontSize: '13px', color: '#94a3b8', maxWidth: '440px', margin: '0 auto 20px' }}>
+                  Connect your Web3 wallet or GenLayer StudioNet account to declare and freeze verifiable state assertions.
+                </p>
+                <button
+                  id="btn-declare-connect-wallet"
+                  onClick={() => setShowWalletModal(true)}
+                  className="wallet-btn connect-glow"
+                  style={{ margin: '0 auto', padding: '10px 24px', fontSize: '14px' }}
                 >
-                  <option value="REGISTRY_RECORD">REGISTRY_RECORD (Land, corporate, public registries)</option>
-                  <option value="STATE_TRANSITION">STATE_TRANSITION (Blockchain milestones, telemetry state)</option>
-                  <option value="FACTUAL_EVENT">FACTUAL_EVENT (Verifiable real-world events)</option>
-                  <option value="GOVERNANCE_EXECUTION">GOVERNANCE_EXECUTION (DAO execution, council votes)</option>
-                  <option value="COMPLIANCE_STATUS">COMPLIANCE_STATUS (Audits, certifications, licenses)</option>
-                </select>
+                  <Wallet size={16} />
+                  <span>Connect Wallet to Declare</span>
+                </button>
               </div>
-
-              <div className="form-group">
-                <label className="form-label">Subject</label>
-                <input
-                  id="input-declare-subject"
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Delaware Entity Registry #749102 / OpenZeppelin v5.0 Audit"
-                  value={newSubject}
-                  onChange={(e) => setNewSubject(e.target.value)}
-                  required
-                />
-                <div className="form-help">The specific entity, asset, or event being asserted.</div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            ) : (
+              <form onSubmit={handleDeclareSubmit}>
                 <div className="form-group">
-                  <label className="form-label">Predicate</label>
-                  <input
-                    id="input-declare-predicate"
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. audit_certified_zero_critical_vulnerabilities"
-                    value={newPredicate}
-                    onChange={(e) => setNewPredicate(e.target.value)}
-                    required
-                  />
-                  <div className="form-help">Structured attribute to be verified.</div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Asserted Value</label>
-                  <input
-                    id="input-declare-asserted-value"
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. TRUE / CERTIFIED"
-                    value={newAssertedValue}
-                    onChange={(e) => setNewAssertedValue(e.target.value)}
-                    required
-                  />
-                  <div className="form-help">The exact claimed target state.</div>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div className="form-group">
-                  <label className="form-label">Reference Date</label>
-                  <input
-                    id="input-declare-reference-date"
-                    type="date"
-                    className="form-input"
-                    value={newReferenceDate}
-                    onChange={(e) => setNewReferenceDate(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Admissibility Policy</label>
+                  <label className="form-label">Domain Category</label>
                   <select
-                    id="select-declare-policy"
+                    id="select-declare-type"
                     className="form-select"
-                    value={newPolicy}
-                    onChange={(e) => setNewPolicy(e.target.value as AdmissibilityPolicy)}
+                    value={newClaimType}
+                    onChange={(e) => setNewClaimType(e.target.value as ClaimType)}
                   >
-                    <option value="OFFICIAL_REGISTRY">OFFICIAL_REGISTRY (Government / official records)</option>
-                    <option value="REGULATORY_FILING">REGULATORY_FILING (SEC / statutory reports)</option>
-                    <option value="MULTI_SOURCE_INDEPENDENT">MULTI_SOURCE_INDEPENDENT (Min 2 sources)</option>
-                    <option value="PRIMARY_PLUS_CORROBORATION">PRIMARY_PLUS_CORROBORATION</option>
-                    <option value="OPEN_PUBLIC">OPEN_PUBLIC (General verified web evidence)</option>
+                    <option value="REGISTRY_RECORD">REGISTRY_RECORD (Land, corporate, public registries)</option>
+                    <option value="STATE_TRANSITION">STATE_TRANSITION (Blockchain milestones, telemetry state)</option>
+                    <option value="FACTUAL_EVENT">FACTUAL_EVENT (Verifiable real-world events)</option>
+                    <option value="GOVERNANCE_EXECUTION">GOVERNANCE_EXECUTION (DAO execution, council votes)</option>
+                    <option value="COMPLIANCE_STATUS">COMPLIANCE_STATUS (Audits, certifications, licenses)</option>
                   </select>
                 </div>
-              </div>
 
-              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <input
-                  type="checkbox"
-                  id="freezeCheck"
-                  checked={freezeImmediately}
-                  onChange={(e) => setFreezeImmediately(e.target.checked)}
-                  style={{ width: '16px', height: '16px', accentColor: '#10b981' }}
-                />
-                <label htmlFor="freezeCheck" style={{ fontSize: '13px', color: '#cbd5e1', cursor: 'pointer' }}>
-                  Freeze claim on-chain immediately and open evidence submission window
-                </label>
-              </div>
+                <div className="form-group">
+                  <label className="form-label">Subject</label>
+                  <input
+                    id="input-declare-subject"
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Delaware Entity Registry #749102 / OpenZeppelin v5.0 Audit"
+                    value={newSubject}
+                    onChange={(e) => setNewSubject(e.target.value)}
+                    required
+                  />
+                  <div className="form-help">The specific entity, asset, or event being asserted.</div>
+                </div>
 
-              <button
-                id="btn-broadcast-declare"
-                type="submit"
-                disabled={isDeclaring}
-                className="btn-primary"
-                style={{ width: '100%', marginTop: '12px' }}
-              >
-                {isDeclaring ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    <span>Broadcasting & Awaiting Validator Consensus...</span>
-                  </>
-                ) : (
-                  <>
-                    <Lock size={16} /> Broadcast On-Chain Assertion to StudioNet
-                  </>
-                )}
-              </button>
-            </form>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Predicate</label>
+                    <input
+                      id="input-declare-predicate"
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. audit_certified_zero_critical_vulnerabilities"
+                      value={newPredicate}
+                      onChange={(e) => setNewPredicate(e.target.value)}
+                      required
+                    />
+                    <div className="form-help">Structured attribute to be verified.</div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Asserted Value</label>
+                    <input
+                      id="input-declare-asserted-value"
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. TRUE / CERTIFIED"
+                      value={newAssertedValue}
+                      onChange={(e) => setNewAssertedValue(e.target.value)}
+                      required
+                    />
+                    <div className="form-help">The exact claimed target state.</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Reference Date</label>
+                    <input
+                      id="input-declare-reference-date"
+                      type="date"
+                      className="form-input"
+                      value={newReferenceDate}
+                      onChange={(e) => setNewReferenceDate(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Admissibility Policy</label>
+                    <select
+                      id="select-declare-policy"
+                      className="form-select"
+                      value={newPolicy}
+                      onChange={(e) => setNewPolicy(e.target.value as AdmissibilityPolicy)}
+                    >
+                      <option value="OFFICIAL_REGISTRY">OFFICIAL_REGISTRY (Government / official records)</option>
+                      <option value="REGULATORY_FILING">REGULATORY_FILING (SEC / statutory reports)</option>
+                      <option value="MULTI_SOURCE_INDEPENDENT">MULTI_SOURCE_INDEPENDENT (Min 2 sources)</option>
+                      <option value="PRIMARY_PLUS_CORROBORATION">PRIMARY_PLUS_CORROBORATION</option>
+                      <option value="OPEN_PUBLIC">OPEN_PUBLIC (General verified web evidence)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input
+                    type="checkbox"
+                    id="freezeCheck"
+                    checked={freezeImmediately}
+                    onChange={(e) => setFreezeImmediately(e.target.checked)}
+                    style={{ width: '16px', height: '16px', accentColor: '#10b981' }}
+                  />
+                  <label htmlFor="freezeCheck" style={{ fontSize: '13px', color: '#cbd5e1', cursor: 'pointer' }}>
+                    Freeze claim on-chain immediately and open evidence submission window
+                  </label>
+                </div>
+
+                <button
+                  id="btn-broadcast-declare"
+                  type="submit"
+                  disabled={isDeclaring}
+                  className="btn-primary"
+                  style={{ width: '100%', marginTop: '12px' }}
+                >
+                  {isDeclaring ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Broadcasting & Awaiting Validator Consensus...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock size={16} /> Broadcast On-Chain Assertion to StudioNet
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
           </div>
         )}
 
@@ -859,73 +918,96 @@ export function App() {
               </div>
             )}
 
-            <form onSubmit={handleEvidenceSubmit}>
-              <div className="form-group">
-                <label className="form-label">Select Target State Claim</label>
-                <select
-                  id="select-evidence-target-claim"
-                  className="form-select"
-                  value={targetClaimId}
-                  onChange={(e) => setTargetClaimId(e.target.value)}
+            {!walletConnected ? (
+              <div className="wallet-required-banner">
+                <div className="wallet-required-icon">
+                  <Lock size={28} />
+                </div>
+                <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#f8fafc', marginBottom: '8px' }}>
+                  Wallet Connection Required
+                </h3>
+                <p style={{ fontSize: '13px', color: '#94a3b8', maxWidth: '440px', margin: '0 auto 20px' }}>
+                  Please connect your Web3 wallet or GenLayer StudioNet account to submit verifiable web evidence on-chain.
+                </p>
+                <button
+                  id="btn-evidence-connect-wallet"
+                  onClick={() => setShowWalletModal(true)}
+                  className="wallet-btn connect-glow"
+                  style={{ margin: '0 auto', padding: '10px 24px', fontSize: '14px' }}
                 >
-                  {claims.length === 0 ? (
-                    <option value="">No claims found on-chain</option>
+                  <Wallet size={16} />
+                  <span>Connect Wallet to Submit Evidence</span>
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleEvidenceSubmit}>
+                <div className="form-group">
+                  <label className="form-label">Select Target State Claim</label>
+                  <select
+                    id="select-evidence-target-claim"
+                    className="form-select"
+                    value={targetClaimId}
+                    onChange={(e) => setTargetClaimId(e.target.value)}
+                  >
+                    {claims.length === 0 ? (
+                      <option value="">No claims found on-chain</option>
+                    ) : (
+                      claims.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.id} - {c.subject} ({c.status})
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Source URL (HTTP / HTTPS)</label>
+                  <input
+                    id="input-evidence-source-url"
+                    type="url"
+                    className="form-input"
+                    placeholder="https://github.com/OpenZeppelin/openzeppelin-contracts/releases/tag/v5.0.0"
+                    value={sourceUrl}
+                    onChange={(e) => setSourceUrl(e.target.value)}
+                    required
+                  />
+                  <div className="form-help">Validators will fetch this web page defensively during consensus.</div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Contextual Rationale & Excerpt</label>
+                  <textarea
+                    id="input-evidence-explanation"
+                    className="form-textarea"
+                    rows={4}
+                    placeholder="Provide objective proof and source excerpt linking this URL to the asserted state predicate..."
+                    value={explanation}
+                    onChange={(e) => setExplanation(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <button
+                  id="btn-broadcast-evidence"
+                  type="submit"
+                  disabled={isSubmittingEvidence || !targetClaimId}
+                  className="btn-primary"
+                  style={{ width: '100%', marginTop: '8px' }}
+                >
+                  {isSubmittingEvidence ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Broadcasting Evidence Transaction to StudioNet...</span>
+                    </>
                   ) : (
-                    claims.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.id} - {c.subject} ({c.status})
-                      </option>
-                    ))
+                    <>
+                      <Send size={16} /> Broadcast Evidence Transaction
+                    </>
                   )}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Source URL (HTTP / HTTPS)</label>
-                <input
-                  id="input-evidence-source-url"
-                  type="url"
-                  className="form-input"
-                  placeholder="https://github.com/OpenZeppelin/openzeppelin-contracts/releases/tag/v5.0.0"
-                  value={sourceUrl}
-                  onChange={(e) => setSourceUrl(e.target.value)}
-                  required
-                />
-                <div className="form-help">Validators will fetch this web page defensively during consensus.</div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Contextual Rationale & Excerpt</label>
-                <textarea
-                  id="input-evidence-explanation"
-                  className="form-textarea"
-                  rows={4}
-                  placeholder="Provide objective proof and source excerpt linking this URL to the asserted state predicate..."
-                  value={explanation}
-                  onChange={(e) => setExplanation(e.target.value)}
-                  required
-                />
-              </div>
-
-              <button
-                id="btn-broadcast-evidence"
-                type="submit"
-                disabled={isSubmittingEvidence || !targetClaimId}
-                className="btn-primary"
-                style={{ width: '100%', marginTop: '8px' }}
-              >
-                {isSubmittingEvidence ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    <span>Broadcasting Evidence Transaction to StudioNet...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send size={16} /> Broadcast Evidence Transaction
-                  </>
-                )}
-              </button>
-            </form>
+                </button>
+              </form>
+            )}
           </div>
         )}
 
@@ -941,104 +1023,129 @@ export function App() {
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Select Claim to Adjudicate</label>
-              <select
-                id="select-adjudicate-claim"
-                className="form-select"
-                value={adjClaimId}
-                onChange={(e) => {
-                  setAdjClaimId(e.target.value);
-                  setAdjudicationSuccess(null);
-                }}
-              >
-                {claims.length === 0 ? (
-                  <option value="">No claims found on-chain</option>
-                ) : (
-                  claims.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.id} - {c.subject} (Evidence: {c.evidence_count}, Status: {c.status})
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-
-            {/* Claim Quick Summary */}
-            {(() => {
-              const currentClaim = claims.find((c) => c.id === adjClaimId);
-              if (!currentClaim) return null;
-              return (
-                <div
-                  style={{
-                    background: '#070b14',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: '12px',
-                    padding: '16px 20px',
-                    marginBottom: '20px',
-                  }}
+            {!walletConnected ? (
+              <div className="wallet-required-banner">
+                <div className="wallet-required-icon">
+                  <Lock size={28} />
+                </div>
+                <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#f8fafc', marginBottom: '8px' }}>
+                  Wallet Connection Required
+                </h3>
+                <p style={{ fontSize: '13px', color: '#94a3b8', maxWidth: '440px', margin: '0 auto 20px' }}>
+                  Please connect your Web3 wallet or GenLayer StudioNet account to trigger multi-validator LLM consensus adjudication.
+                </p>
+                <button
+                  id="btn-adjudicate-connect-wallet"
+                  onClick={() => setShowWalletModal(true)}
+                  className="wallet-btn connect-glow"
+                  style={{ margin: '0 auto', padding: '10px 24px', fontSize: '14px' }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', color: '#06b6d4', fontWeight: '700' }}>
-                      {currentClaim.id}
-                    </span>
-                    <span className="badge badge-cyan">{currentClaim.source_policy || 'Policy Pending'}</span>
-                  </div>
-                  <h4 style={{ fontSize: '16px', fontWeight: '700' }}>{currentClaim.subject}</h4>
-                  <div style={{ fontSize: '13px', color: '#94a3b8', marginTop: '6px' }}>
-                    Predicate: <strong style={{ color: '#10b981' }}>{currentClaim.predicate}</strong> ➔{' '}
-                    <strong style={{ color: '#f8fafc' }}>{currentClaim.asserted_value}</strong>
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
-                    Status: <strong>{currentClaim.status}</strong> | Evidence Records: <strong>{currentClaim.evidence_count}</strong>
-                  </div>
-                </div>
-              );
-            })()}
-
-            <button
-              id="btn-trigger-adjudicate"
-              onClick={() => handleRunAdjudication(adjClaimId)}
-              disabled={isAdjudicating || !adjClaimId}
-              className="btn-primary"
-              style={{ width: '100%', marginBottom: '24px' }}
-            >
-              {isAdjudicating ? (
-                <>
-                  <Sparkles size={16} className="animate-spin" />
-                  <span>GenLayer Validators Performing Consensus Round on StudioNet...</span>
-                </>
-              ) : (
-                <>
-                  <Scale size={16} />
-                  <span>Trigger Multi-Validator LLM Consensus Transaction</span>
-                </>
-              )}
-            </button>
-
-            {/* Adjudication Outcome Box */}
-            {adjudicationSuccess && (
-              <div
-                className="verdict-box confirmed"
-                style={{
-                  border: '1px solid #10b981',
-                  background: 'rgba(16, 185, 129, 0.1)',
-                  padding: '24px',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <CheckCircle2 size={24} color="#10b981" />
-                    <span style={{ fontSize: '18px', fontWeight: '800', color: '#10b981' }}>
-                      ON-CHAIN VERDICT: {adjudicationSuccess.verdict}
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ marginTop: '12px', fontSize: '13px', color: '#94a3b8', wordBreak: 'break-all' }}>
-                  Consensus Tx Hash: {adjudicationSuccess.txHash}
-                </div>
+                  <Wallet size={16} />
+                  <span>Connect Wallet to Adjudicate</span>
+                </button>
               </div>
+            ) : (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Select Claim to Adjudicate</label>
+                  <select
+                    id="select-adjudicate-claim"
+                    className="form-select"
+                    value={adjClaimId}
+                    onChange={(e) => {
+                      setAdjClaimId(e.target.value);
+                      setAdjudicationSuccess(null);
+                    }}
+                  >
+                    {claims.length === 0 ? (
+                      <option value="">No claims found on-chain</option>
+                    ) : (
+                      claims.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.id} - {c.subject} (Evidence: {c.evidence_count}, Status: {c.status})
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+
+                {/* Claim Quick Summary */}
+                {(() => {
+                  const currentClaim = claims.find((c) => c.id === adjClaimId);
+                  if (!currentClaim) return null;
+                  return (
+                    <div
+                      style={{
+                        background: '#070b14',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        borderRadius: '12px',
+                        padding: '16px 20px',
+                        marginBottom: '20px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', color: '#06b6d4', fontWeight: '700' }}>
+                          {currentClaim.id}
+                        </span>
+                        <span className="badge badge-cyan">{currentClaim.source_policy || 'Policy Pending'}</span>
+                      </div>
+                      <h4 style={{ fontSize: '16px', fontWeight: '700' }}>{currentClaim.subject}</h4>
+                      <div style={{ fontSize: '13px', color: '#94a3b8', marginTop: '6px' }}>
+                        Predicate: <strong style={{ color: '#10b981' }}>{currentClaim.predicate}</strong> ➔{' '}
+                        <strong style={{ color: '#f8fafc' }}>{currentClaim.asserted_value}</strong>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
+                        Status: <strong>{currentClaim.status}</strong> | Evidence Records: <strong>{currentClaim.evidence_count}</strong>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <button
+                  id="btn-trigger-adjudicate"
+                  onClick={() => handleRunAdjudication(adjClaimId)}
+                  disabled={isAdjudicating || !adjClaimId}
+                  className="btn-primary"
+                  style={{ width: '100%', marginBottom: '24px' }}
+                >
+                  {isAdjudicating ? (
+                    <>
+                      <Sparkles size={16} className="animate-spin" />
+                      <span>GenLayer Validators Performing Consensus Round on StudioNet...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Scale size={16} />
+                      <span>Trigger Multi-Validator LLM Consensus Transaction</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Adjudication Outcome Box */}
+                {adjudicationSuccess && (
+                  <div
+                    className="verdict-box confirmed"
+                    style={{
+                      border: '1px solid #10b981',
+                      background: 'rgba(16, 185, 129, 0.1)',
+                      padding: '24px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <CheckCircle2 size={24} color="#10b981" />
+                        <span style={{ fontSize: '18px', fontWeight: '800', color: '#10b981' }}>
+                          ON-CHAIN VERDICT: {adjudicationSuccess.verdict}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: '12px', fontSize: '13px', color: '#94a3b8', wordBreak: 'break-all' }}>
+                      Consensus Tx Hash: {adjudicationSuccess.txHash}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -1105,6 +1212,79 @@ export function App() {
                 <div style={{ color: '#fbbf24', marginTop: '4px' }}>
                   Target Network:   StudioNet (Chain ID: {GENSTATE_CONFIG.chainId})
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Wallet Connection Modal */}
+        {showWalletModal && (
+          <div className="wallet-modal-overlay" onClick={() => !connectingWallet && setShowWalletModal(false)}>
+            <div className="wallet-modal-box" onClick={(e) => e.stopPropagation()}>
+              <div className="wallet-modal-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div className="wallet-icon-badge">
+                    <Wallet size={18} color="#10b981" />
+                  </div>
+                  <h3 className="wallet-modal-title">Connect Wallet</h3>
+                </div>
+                <button
+                  className="wallet-modal-close"
+                  onClick={() => !connectingWallet && setShowWalletModal(false)}
+                  disabled={connectingWallet}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="wallet-modal-body">
+                <p className="wallet-modal-subtitle">
+                  Select your preferred connection method to interact with GenState on GenLayer StudioNet.
+                </p>
+
+                <div className="wallet-choices-list">
+                  <div
+                    className="wallet-choice-card"
+                    onClick={() => !connectingWallet && handleConnect('studionet')}
+                    id="connect-studionet-option"
+                  >
+                    <div className="wallet-choice-icon studionet">
+                      <Sparkles size={22} color="#10b981" />
+                    </div>
+                    <div className="wallet-choice-info">
+                      <div className="wallet-choice-name">
+                        GenLayer StudioNet Account
+                        <span className="wallet-pill-recommended">Recommended</span>
+                      </div>
+                      <div className="wallet-choice-desc">
+                        Instant 1-click testnet account pre-funded with GEN for transactions.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className="wallet-choice-card"
+                    onClick={() => !connectingWallet && handleConnect('browser')}
+                    id="connect-browser-option"
+                  >
+                    <div className="wallet-choice-icon injected">
+                      <Wallet size={22} color="#06b6d4" />
+                    </div>
+                    <div className="wallet-choice-info">
+                      <div className="wallet-choice-name">Browser Extension Wallet</div>
+                      <div className="wallet-choice-desc">
+                        Connect via MetaMask or other injected Web3 wallet provider.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {connectingWallet && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginTop: '16px', color: '#10b981', fontSize: '13px' }}>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Connecting wallet & synchronizing balance...</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

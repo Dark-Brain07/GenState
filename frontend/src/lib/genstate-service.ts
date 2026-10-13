@@ -10,34 +10,90 @@ import type {
 } from "../types/genstate";
 
 class LiveGenStateService {
-  private client: any;
-  private account: any;
+  private readClient: any;
+  private client: any = null;
+  private account: any = null;
+  private connectedType: "studionet" | "browser" | null = null;
+  private browserAddress: string = "";
 
   constructor() {
-    this.initAccount();
+    this.readClient = createClient({ chain: studionet });
   }
 
-  private initAccount() {
-    try {
-      let storedKey = localStorage.getItem("genstate_session_key");
-      if (!storedKey) {
-        storedKey = generatePrivateKey();
-        localStorage.setItem("genstate_session_key", storedKey);
-      }
-      this.account = createAccount(storedKey as `0x${string}`);
-    } catch {
-      this.account = createAccount();
-    }
-    this.client = createClient({ chain: studionet, account: this.account });
+  public isConnected(): boolean {
+    return !!this.account || !!this.browserAddress;
   }
 
   public getAccountAddress(): string {
-    return this.account?.address || "";
+    return this.browserAddress || this.account?.address || "";
+  }
+
+  public getConnectedType(): "studionet" | "browser" | null {
+    return this.connectedType;
+  }
+
+  /**
+   * Connect wallet on explicit user action.
+   */
+  public async connectWallet(
+    type: "studionet" | "browser" = "studionet"
+  ): Promise<{ address: string; balance: string }> {
+    if (type === "browser" && typeof window !== "undefined" && (window as any).ethereum) {
+      try {
+        const ethereum = (window as any).ethereum;
+        const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+        if (!accounts || accounts.length === 0) {
+          throw new Error("No accounts authorized in browser wallet.");
+        }
+        this.browserAddress = accounts[0];
+        this.connectedType = "browser";
+
+        // For GenLayer transaction execution on StudioNet, initialize paired signer
+        let storedKey = localStorage.getItem("genstate_session_key");
+        if (!storedKey) {
+          storedKey = generatePrivateKey();
+          localStorage.setItem("genstate_session_key", storedKey);
+        }
+        this.account = createAccount(storedKey as `0x${string}`);
+        this.client = createClient({ chain: studionet, account: this.account });
+
+        const balance = await this.ensureBalance();
+        return { address: this.browserAddress, balance };
+      } catch (err: any) {
+        console.error("Browser wallet connection error:", err);
+        throw err;
+      }
+    }
+
+    // Default: Native GenLayer StudioNet Account
+    let storedKey = localStorage.getItem("genstate_session_key");
+    if (!storedKey) {
+      storedKey = generatePrivateKey();
+      localStorage.setItem("genstate_session_key", storedKey);
+    }
+    this.account = createAccount(storedKey as `0x${string}`);
+    this.client = createClient({ chain: studionet, account: this.account });
+    this.connectedType = "studionet";
+    this.browserAddress = "";
+
+    const balance = await this.ensureBalance();
+    return { address: this.account.address, balance };
+  }
+
+  /**
+   * Disconnect the active wallet session.
+   */
+  public disconnectWallet(): void {
+    this.account = null;
+    this.client = null;
+    this.connectedType = null;
+    this.browserAddress = "";
   }
 
   public async ensureBalance(): Promise<string> {
+    if (!this.account) return "0.0000 GEN";
     try {
-      const balance = await this.client.getBalance({ address: this.account.address });
+      const balance = await this.readClient.getBalance({ address: this.account.address });
       if (balance < 100000000000000000n) {
         // Request funds via StudioNet sim_fundAccount RPC
         await fetch(GENSTATE_CONFIG.rpcUrl, {
@@ -51,11 +107,11 @@ class LiveGenStateService {
           }),
         });
       }
-      const updated = await this.client.getBalance({ address: this.account.address });
+      const updated = await this.readClient.getBalance({ address: this.account.address });
       return (Number(updated) / 1e18).toFixed(4) + " GEN";
     } catch {
       try {
-        const bal = await this.client.getBalance({ address: this.account.address });
+        const bal = await this.readClient.getBalance({ address: this.account.address });
         return (Number(bal) / 1e18).toFixed(4) + " GEN";
       } catch {
         return "0.0000 GEN";
@@ -67,7 +123,8 @@ class LiveGenStateService {
    * Fetch protocol-level telemetry metrics live from deployed contract.
    */
   public async fetchProtocolStats(): Promise<ProtocolStats> {
-    const raw = await this.client.readContract({
+    const runner = this.client || this.readClient;
+    const raw = await runner.readContract({
       address: GENSTATE_CONFIG.contractAddress,
       functionName: "get_protocol_stats",
       args: [],
@@ -90,7 +147,8 @@ class LiveGenStateService {
    * Fetch paginated state claims live from deployed contract.
    */
   public async fetchClaims(offset = 0, limit = 50): Promise<StateClaim[]> {
-    const list = await this.client.readContract({
+    const runner = this.client || this.readClient;
+    const list = await runner.readContract({
       address: GENSTATE_CONFIG.contractAddress,
       functionName: "list_claims",
       args: [offset, limit],
@@ -121,7 +179,8 @@ class LiveGenStateService {
    * Fetch a single claim by ID live from deployed contract.
    */
   public async fetchClaim(claimId: string): Promise<StateClaim> {
-    const item = await this.client.readContract({
+    const runner = this.client || this.readClient;
+    const item = await runner.readContract({
       address: GENSTATE_CONFIG.contractAddress,
       functionName: "get_claim",
       args: [claimId],
@@ -150,7 +209,8 @@ class LiveGenStateService {
    * Fetch all evidence records for a claim live from deployed contract.
    */
   public async fetchEvidence(claimId: string): Promise<EvidenceRecord[]> {
-    const list = await this.client.readContract({
+    const runner = this.client || this.readClient;
+    const list = await runner.readContract({
       address: GENSTATE_CONFIG.contractAddress,
       functionName: "get_evidence_for_claim",
       args: [claimId],
@@ -171,7 +231,8 @@ class LiveGenStateService {
    * Fetch consensus adjudication ruling live from deployed contract.
    */
   public async fetchAdjudication(claimId: string): Promise<AdjudicationResult | null> {
-    const res = await this.client.readContract({
+    const runner = this.client || this.readClient;
+    const res = await runner.readContract({
       address: GENSTATE_CONFIG.contractAddress,
       functionName: "get_adjudication",
       args: [claimId],
@@ -191,6 +252,12 @@ class LiveGenStateService {
     };
   }
 
+  private requireConnectedClient() {
+    if (!this.client || !this.account) {
+      throw new Error("Please connect your wallet first to execute on-chain transactions.");
+    }
+  }
+
   /**
    * Broadcast real on-chain transaction: declare_claim.
    */
@@ -201,6 +268,7 @@ class LiveGenStateService {
     assertedValue: string,
     referenceDate: string
   ): Promise<{ txHash: string; claimId: string }> {
+    this.requireConnectedClient();
     await this.ensureBalance();
 
     const txHash = await this.client.writeContract({
@@ -230,6 +298,7 @@ class LiveGenStateService {
     sourcePolicy: string,
     windowSeconds = 86400
   ): Promise<{ txHash: string }> {
+    this.requireConnectedClient();
     await this.ensureBalance();
 
     const txHash = await this.client.writeContract({
@@ -256,6 +325,7 @@ class LiveGenStateService {
     sourceUrl: string,
     explanation: string
   ): Promise<{ txHash: string }> {
+    this.requireConnectedClient();
     await this.ensureBalance();
 
     const txHash = await this.client.writeContract({
@@ -279,6 +349,7 @@ class LiveGenStateService {
    * Invokes GenLayer multi-validator LLM consensus round.
    */
   public async adjudicateClaim(claimId: string): Promise<{ txHash: string; verdict: string }> {
+    this.requireConnectedClient();
     await this.ensureBalance();
 
     const txHash = await this.client.writeContract({
@@ -305,6 +376,7 @@ class LiveGenStateService {
     claimId: string,
     recipientAddress: string
   ): Promise<{ txHash: string }> {
+    this.requireConnectedClient();
     await this.ensureBalance();
 
     const txHash = await this.client.writeContract({
