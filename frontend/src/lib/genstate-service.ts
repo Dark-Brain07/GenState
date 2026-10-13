@@ -33,6 +33,39 @@ class LiveGenStateService {
   }
 
   /**
+   * Request browser wallet to switch to or register GenLayer StudioNet.
+   */
+  public async switchOrAddStudioNet(): Promise<void> {
+    if (typeof window === "undefined" || !(window as any).ethereum) return;
+    const ethereum = (window as any).ethereum;
+    try {
+      await ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: "0xf22f" }], // 61999
+      });
+    } catch (switchError: any) {
+      if (switchError.code === 4902 || switchError.data?.originalError?.code === 4902) {
+        try {
+          await ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [
+              {
+                chainId: "0xf22f",
+                chainName: "Genlayer Studio Network",
+                nativeCurrency: { name: "GEN Token", symbol: "GEN", decimals: 18 },
+                rpcUrls: ["https://studio.genlayer.com/api"],
+                blockExplorerUrls: ["https://explorer-studio.genlayer.com"],
+              },
+            ],
+          });
+        } catch (addError) {
+          console.warn("Could not register GenLayer StudioNet with wallet:", addError);
+        }
+      }
+    }
+  }
+
+  /**
    * Connect wallet on explicit user action.
    */
   public async connectWallet(
@@ -47,15 +80,20 @@ class LiveGenStateService {
         }
         this.browserAddress = accounts[0];
         this.connectedType = "browser";
+        this.account = null;
 
-        // For GenLayer transaction execution on StudioNet, initialize paired signer
-        let storedKey = localStorage.getItem("genstate_session_key");
-        if (!storedKey) {
-          storedKey = generatePrivateKey();
-          localStorage.setItem("genstate_session_key", storedKey);
+        // Try switching or registering GenLayer StudioNet in browser wallet
+        try {
+          await this.switchOrAddStudioNet();
+        } catch {
+          // Gracefully continue even if switch rejected
         }
-        this.account = createAccount(storedKey as `0x${string}`);
-        this.client = createClient({ chain: studionet, account: this.account });
+
+        // Initialize client configured with the browser address
+        this.client = createClient({
+          chain: studionet,
+          account: this.browserAddress as `0x${string}`,
+        });
 
         const balance = await this.ensureBalance();
         return { address: this.browserAddress, balance };
@@ -90,12 +128,58 @@ class LiveGenStateService {
     this.browserAddress = "";
   }
 
+  /**
+   * Format balance in wei to a clean human-readable GEN string with comma separators.
+   */
+  public formatWeiToGen(wei: bigint): string {
+    const oneGen = 1000000000000000000n;
+    const whole = wei / oneGen;
+    const fraction = wei % oneGen;
+    const fractionStr = fraction.toString().padStart(18, "0").slice(0, 4);
+    return `${whole.toLocaleString()}.${fractionStr} GEN`;
+  }
+
+  /**
+   * Get the real balance of the currently active account.
+   * If browser wallet is connected, queries window.ethereum (user's provider)
+   * and GenLayer StudioNet RPC for the user's browser address, displaying their real GEN balance.
+   */
   public async ensureBalance(): Promise<string> {
-    if (!this.account) return "0.0000 GEN";
+    const activeAddress = this.getAccountAddress();
+    if (!activeAddress) return "0.0000 GEN";
+
+    let balanceWei = 0n;
+
+    // 1. If connected via browser wallet, query user's extension directly
+    if (this.connectedType === "browser" && typeof window !== "undefined" && (window as any).ethereum) {
+      try {
+        const rawHex = await (window as any).ethereum.request({
+          method: "eth_getBalance",
+          params: [activeAddress, "latest"],
+        });
+        if (rawHex && rawHex !== "0x" && rawHex !== "0x0") {
+          const b = BigInt(rawHex);
+          if (b > balanceWei) balanceWei = b;
+        }
+      } catch (err) {
+        console.warn("eth_getBalance via window.ethereum failed:", err);
+      }
+    }
+
+    // 2. Query GenLayer StudioNet RPC for active address
     try {
-      const balance = await this.readClient.getBalance({ address: this.account.address });
-      if (balance < 100000000000000000n) {
-        // Request funds via StudioNet sim_fundAccount RPC
+      const rpcBal = await this.readClient.getBalance({ address: activeAddress });
+      if (rpcBal) {
+        const b = BigInt(rpcBal);
+        if (b > balanceWei) balanceWei = b;
+      }
+    } catch (err) {
+      console.warn("readClient getBalance failed:", err);
+    }
+
+    // 3. If Native StudioNet account and has 0 or low balance, auto-fund via testnet faucet RPC
+    if (this.connectedType === "studionet" && balanceWei < 100000000000000000n && this.account) {
+      try {
         await fetch(GENSTATE_CONFIG.rpcUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -103,20 +187,17 @@ class LiveGenStateService {
             jsonrpc: "2.0",
             id: Date.now(),
             method: "sim_fundAccount",
-            params: [this.account.address, 1000000000000000000],
+            params: [this.account.address, 10000000000000000000], // 10 GEN
           }),
         });
-      }
-      const updated = await this.readClient.getBalance({ address: this.account.address });
-      return (Number(updated) / 1e18).toFixed(4) + " GEN";
-    } catch {
-      try {
-        const bal = await this.readClient.getBalance({ address: this.account.address });
-        return (Number(bal) / 1e18).toFixed(4) + " GEN";
-      } catch {
-        return "0.0000 GEN";
+        const updated = await this.readClient.getBalance({ address: this.account.address });
+        balanceWei = BigInt(updated);
+      } catch (err) {
+        console.warn("Auto-funding failed:", err);
       }
     }
+
+    return this.formatWeiToGen(balanceWei);
   }
 
   /**
@@ -253,7 +334,7 @@ class LiveGenStateService {
   }
 
   private requireConnectedClient() {
-    if (!this.client || !this.account) {
+    if (!this.client || (!this.account && !this.browserAddress)) {
       throw new Error("Please connect your wallet first to execute on-chain transactions.");
     }
   }

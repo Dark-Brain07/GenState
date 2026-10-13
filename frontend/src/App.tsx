@@ -165,6 +165,37 @@ export function App() {
     setWalletBalance('0.0000 GEN');
   };
 
+  // Synchronize browser wallet account or network switch dynamically
+  useEffect(() => {
+    if (typeof window === 'undefined' || !(window as any).ethereum) return;
+    const ethereum = (window as any).ethereum;
+
+    const handleAccountsChanged = async (accounts: string[]) => {
+      if (accounts.length === 0) {
+        handleDisconnect();
+      } else if (walletConnected && genStateService.getConnectedType() === 'browser') {
+        setWalletAddress(accounts[0]);
+        const bal = await genStateService.ensureBalance();
+        setWalletBalance(bal);
+      }
+    };
+
+    const handleChainChanged = async () => {
+      if (walletConnected) {
+        const bal = await genStateService.ensureBalance();
+        setWalletBalance(bal);
+      }
+    };
+
+    ethereum.on?.('accountsChanged', handleAccountsChanged);
+    ethereum.on?.('chainChanged', handleChainChanged);
+
+    return () => {
+      ethereum.removeListener?.('accountsChanged', handleAccountsChanged);
+      ethereum.removeListener?.('chainChanged', handleChainChanged);
+    };
+  }, [walletConnected]);
+
   // Real On-Chain Declare Handler
   const handleDeclareSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
