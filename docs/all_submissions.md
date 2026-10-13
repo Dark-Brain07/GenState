@@ -18,6 +18,8 @@ GenState is a decentralized truth and state consensus protocol built natively on
 - **Live Assertion Declare Tx (CLAIM-3):** `0x3e55be0e7929b7ae88fa77dcd7545a60f4120cb607ef6b6821a1f089915498e7`
 - **Live Evidence Submission Tx (EVID-1):** `0x492c58a28459234b3bdc2052abb3c45437bde06125917f551b90e7dd32bd8bd2`
 - **Live LLM Consensus Adjudication Tx:** `0x1b9d9cc5424efbff94be28ed71699841f6c4c4da7e98315868d6d385f0e1f505`
+- **GitHub Repository:** [https://github.com/Dark-Brain07/GenState](https://github.com/Dark-Brain07/GenState)
+- **Live Vercel DApp:** [https://genstate.vercel.app](https://genstate.vercel.app)
 - **Network:** GenLayer StudioNet (Chain ID: 4224)
 
 ---

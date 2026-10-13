@@ -19,6 +19,7 @@ GenState is an intelligent state consensus protocol built natively on GenLayer's
 | **Live Evidence Tx Hash (EVID-1)** | `0x492c58a28459234b3bdc2052abb3c45437bde06125917f551b90e7dd32bd8bd2` |
 | **Live Multi-Validator Adjudication Tx** | `0x1b9d9cc5424efbff94be28ed71699841f6c4c4da7e98315868d6d385f0e1f505` |
 | **Consensus Finality** | Finalized (Status: 7, 5/5 validator quorum agree) |
+| **Live Vercel DApp** | [https://genstate.vercel.app](https://genstate.vercel.app) |
 | **Explorer Link** | [View on GenLayer Studio Explorer](https://explorer-studio.genlayer.com/address/0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28) |
 
 ---
