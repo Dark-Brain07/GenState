@@ -1,32 +1,27 @@
-# React + TypeScript + Vite
+# GenState Web Application 🌐⚖️
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Futuristic Cyber-Emerald Glassmorphism terminal for decentralized semantic state adjudication on GenLayer StudioNet.
 
-Currently, two official plugins are available:
+## Live Deployed Contract Integration
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Network:** GenLayer StudioNet (Chain ID: `4224`)
+- **Contract Address:** [`0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28`](https://explorer-studio.genlayer.com/address/0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28)
+- **Deployment Transaction:** `0x6f3a36dd106c295e7a1b7c8dc097f817ad0b59b860a8c0649c08c8030bc8e93f`
+- **Genesis Write Transaction:** `0xf74536424a92c9c8e2311cea3357d58552df557593662e521bb3cc2f41f572d4`
+- **RPC Endpoint:** `https://studio.genlayer.com/api`
 
-## React Compiler
+## Development & Building
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+# Install dependencies
+npm install
 
-## Expanding the Oxlint configuration
+# Run development server
+npm run dev
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+# Compile production bundle
+npm run build
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+# Preview production build locally
+npm run preview
 ```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.

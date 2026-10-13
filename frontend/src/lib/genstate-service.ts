@@ -9,7 +9,7 @@ import type {
 const INITIAL_CLAIMS: StateClaim[] = [
   {
     id: "CLAIM-1",
-    creator: "0x9463103F0F1fC9472e097AfF5d33f2Bd29eaFA60",
+    creator: "0x85540C23062a71BE0eF8990924FE4A13d5f510a3",
     claim_type: "REGISTRY_RECORD",
     subject: "GenState Protocol Genesis Deployment",
     predicate: "is_deployed_on_studionet",
@@ -78,19 +78,19 @@ const INITIAL_EVIDENCE: Record<string, EvidenceRecord[]> = {
     {
       id: "EVID-1",
       claim_id: "CLAIM-1",
-      submitter: "0x9463103F0F1fC9472e097AfF5d33f2Bd29eaFA60",
+      submitter: "0x85540C23062a71BE0eF8990924FE4A13d5f510a3",
       source_url:
-        "https://explorer-studio.genlayer.com/address/0xae97EC507454Db2ABA53ef53cA97b7F308801cb1",
+        "https://explorer-studio.genlayer.com/address/0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28",
       explanation:
         "Live deployed contract address verified on GenLayer official StudioNet Explorer.",
     },
     {
       id: "EVID-2",
       claim_id: "CLAIM-1",
-      submitter: "0x8e5Bd026227CC93169Df51BD9C1b6CA82292F0D2",
+      submitter: "0x85540C23062a71BE0eF8990924FE4A13d5f510a3",
       source_url: "https://studio.genlayer.com/api",
       explanation:
-        "Genesis write transaction receipt 0x3157648fa5cdbc222e568b372d760490f5e0f7fbbe372db641f868a8fc91a262 confirmed with Status 7 (Finalized).",
+        "Genesis write transaction receipt 0xf74536424a92c9c8e2311cea3357d58552df557593662e521bb3cc2f41f572d4 confirmed with Status 7 (Finalized).",
     },
   ],
   "CLAIM-2": [
@@ -206,7 +206,7 @@ class GenStateStore {
     return {
       protocol_name: "GenState",
       version: "1.0.0",
-      admin: "0x9463103F0F1fC9472e097AfF5d33f2Bd29eaFA60",
+      admin: "0x85540C23062a71BE0eF8990924FE4A13d5f510a3",
       total_claims: this.claims.length,
       total_evidence: totalEv,
       total_escrowed: totalEscrowedWei.toString(),

@@ -33,7 +33,7 @@ export function App() {
   
   // Wallet State
   const [walletConnected, setWalletConnected] = useState(false);
-  const [walletAddress, setWalletAddress] = useState('0x9463103F0F1fC9472e097AfF5d33f2Bd29eaFA60');
+  const [walletAddress, setWalletAddress] = useState('0x85540C23062a71BE0eF8990924FE4A13d5f510a3');
   const [walletBalance, setWalletBalance] = useState('1.0000 GEN');
   const [copyFeedback, setCopyFeedback] = useState(false);
 
@@ -79,7 +79,7 @@ export function App() {
       setWalletConnected(false);
     } else {
       setWalletConnected(true);
-      setWalletAddress('0x9463103F0F1fC9472e097AfF5d33f2Bd29eaFA60');
+      setWalletAddress('0x85540C23062a71BE0eF8990924FE4A13d5f510a3');
       setWalletBalance('1.0000 GEN');
     }
   };
