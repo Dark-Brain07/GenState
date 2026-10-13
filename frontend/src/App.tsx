@@ -256,6 +256,7 @@ export function App() {
 
           <div className="nav-actions">
             <button
+              id="btn-sync-chain"
               onClick={() => loadBlockchainData(true)}
               className="network-pill"
               style={{ cursor: 'pointer', background: 'rgba(255, 255, 255, 0.05)', color: '#38bdf8' }}
@@ -367,6 +368,7 @@ export function App() {
         {/* Navigation Tabs */}
         <div className="tabs-wrapper">
           <button
+            id="tab-explorer"
             onClick={() => setActiveTab('explorer')}
             className={`tab-button ${activeTab === 'explorer' ? 'active' : ''}`}
           >
@@ -374,6 +376,7 @@ export function App() {
             <span>State Explorer</span>
           </button>
           <button
+            id="tab-declare"
             onClick={() => setActiveTab('declare')}
             className={`tab-button ${activeTab === 'declare' ? 'active' : ''}`}
           >
@@ -381,6 +384,7 @@ export function App() {
             <span>Declare Assertion</span>
           </button>
           <button
+            id="tab-evidence"
             onClick={() => setActiveTab('evidence')}
             className={`tab-button ${activeTab === 'evidence' ? 'active' : ''}`}
           >
@@ -388,6 +392,7 @@ export function App() {
             <span>Submit Evidence</span>
           </button>
           <button
+            id="tab-adjudicate"
             onClick={() => setActiveTab('adjudicate')}
             className={`tab-button ${activeTab === 'adjudicate' ? 'active' : ''}`}
           >
@@ -395,6 +400,7 @@ export function App() {
             <span>Adjudication Console</span>
           </button>
           <button
+            id="tab-docs"
             onClick={() => setActiveTab('docs')}
             className={`tab-button ${activeTab === 'docs' ? 'active' : ''}`}
           >
@@ -697,6 +703,7 @@ export function App() {
               <div className="form-group">
                 <label className="form-label">Domain Category</label>
                 <select
+                  id="select-declare-type"
                   className="form-select"
                   value={newClaimType}
                   onChange={(e) => setNewClaimType(e.target.value as ClaimType)}
@@ -712,6 +719,7 @@ export function App() {
               <div className="form-group">
                 <label className="form-label">Subject</label>
                 <input
+                  id="input-declare-subject"
                   type="text"
                   className="form-input"
                   placeholder="e.g. Delaware Entity Registry #749102 / OpenZeppelin v5.0 Audit"
@@ -726,6 +734,7 @@ export function App() {
                 <div className="form-group">
                   <label className="form-label">Predicate</label>
                   <input
+                    id="input-declare-predicate"
                     type="text"
                     className="form-input"
                     placeholder="e.g. audit_certified_zero_critical_vulnerabilities"
@@ -739,6 +748,7 @@ export function App() {
                 <div className="form-group">
                   <label className="form-label">Asserted Value</label>
                   <input
+                    id="input-declare-asserted-value"
                     type="text"
                     className="form-input"
                     placeholder="e.g. TRUE / CERTIFIED"
@@ -754,6 +764,7 @@ export function App() {
                 <div className="form-group">
                   <label className="form-label">Reference Date</label>
                   <input
+                    id="input-declare-reference-date"
                     type="date"
                     className="form-input"
                     value={newReferenceDate}
@@ -765,6 +776,7 @@ export function App() {
                 <div className="form-group">
                   <label className="form-label">Admissibility Policy</label>
                   <select
+                    id="select-declare-policy"
                     className="form-select"
                     value={newPolicy}
                     onChange={(e) => setNewPolicy(e.target.value as AdmissibilityPolicy)}
@@ -792,6 +804,7 @@ export function App() {
               </div>
 
               <button
+                id="btn-broadcast-declare"
                 type="submit"
                 disabled={isDeclaring}
                 className="btn-primary"
@@ -849,6 +862,7 @@ export function App() {
               <div className="form-group">
                 <label className="form-label">Select Target State Claim</label>
                 <select
+                  id="select-evidence-target-claim"
                   className="form-select"
                   value={targetClaimId}
                   onChange={(e) => setTargetClaimId(e.target.value)}
@@ -868,6 +882,7 @@ export function App() {
               <div className="form-group">
                 <label className="form-label">Source URL (HTTP / HTTPS)</label>
                 <input
+                  id="input-evidence-source-url"
                   type="url"
                   className="form-input"
                   placeholder="https://github.com/OpenZeppelin/openzeppelin-contracts/releases/tag/v5.0.0"
@@ -881,6 +896,7 @@ export function App() {
               <div className="form-group">
                 <label className="form-label">Contextual Rationale & Excerpt</label>
                 <textarea
+                  id="input-evidence-explanation"
                   className="form-textarea"
                   rows={4}
                   placeholder="Provide objective proof and source excerpt linking this URL to the asserted state predicate..."
@@ -891,6 +907,7 @@ export function App() {
               </div>
 
               <button
+                id="btn-broadcast-evidence"
                 type="submit"
                 disabled={isSubmittingEvidence || !targetClaimId}
                 className="btn-primary"
@@ -926,6 +943,7 @@ export function App() {
             <div className="form-group">
               <label className="form-label">Select Claim to Adjudicate</label>
               <select
+                id="select-adjudicate-claim"
                 className="form-select"
                 value={adjClaimId}
                 onChange={(e) => {
@@ -978,6 +996,7 @@ export function App() {
             })()}
 
             <button
+              id="btn-trigger-adjudicate"
               onClick={() => handleRunAdjudication(adjClaimId)}
               disabled={isAdjudicating || !adjClaimId}
               className="btn-primary"
