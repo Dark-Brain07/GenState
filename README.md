@@ -15,6 +15,9 @@ GenState is an intelligent state consensus protocol built natively on GenLayer's
 | **Deployed Contract Address** | [`0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28`](https://explorer-studio.genlayer.com/address/0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28) |
 | **Deployment Transaction Hash** | `0x6f3a36dd106c295e7a1b7c8dc097f817ad0b59b860a8c0649c08c8030bc8e93f` |
 | **Genesis Write Transaction Hash** | `0xf74536424a92c9c8e2311cea3357d58552df557593662e521bb3cc2f41f572d4` |
+| **Live Declare Tx Hash (CLAIM-3)** | `0x3e55be0e7929b7ae88fa77dcd7545a60f4120cb607ef6b6821a1f089915498e7` |
+| **Live Evidence Tx Hash (EVID-1)** | `0x492c58a28459234b3bdc2052abb3c45437bde06125917f551b90e7dd32bd8bd2` |
+| **Live Multi-Validator Adjudication Tx** | `0x1b9d9cc5424efbff94be28ed71699841f6c4c4da7e98315868d6d385f0e1f505` |
 | **Consensus Finality** | Finalized (Status: 7, 5/5 validator quorum agree) |
 | **Explorer Link** | [View on GenLayer Studio Explorer](https://explorer-studio.genlayer.com/address/0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28) |
 
