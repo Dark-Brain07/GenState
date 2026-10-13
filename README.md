@@ -20,6 +20,7 @@ GenState is an intelligent state consensus protocol built natively on GenLayer's
 | **Live Multi-Validator Adjudication Tx** | `0x1b9d9cc5424efbff94be28ed71699841f6c4c4da7e98315868d6d385f0e1f505` |
 | **Consensus Finality** | Finalized (Status: 7, 5/5 validator quorum agree) |
 | **Live Vercel DApp** | [https://genstate.vercel.app](https://genstate.vercel.app) |
+| **Medium Article** | [Read on Medium](https://medium.com/@engraju007/introducing-genstate-decentralized-semantic-state-adjudication-on-genlayer-c1363386f7cc) |
 | **Explorer Link** | [View on GenLayer Studio Explorer](https://explorer-studio.genlayer.com/address/0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28) |
 
 ---
