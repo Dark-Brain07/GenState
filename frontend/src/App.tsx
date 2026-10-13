@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   Scale,
@@ -18,23 +18,38 @@ import {
   Wallet,
   Sparkles,
   BookOpen,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { GENSTATE_CONFIG } from './lib/config';
 import { genStateService } from './lib/genstate-service';
-import type { StateClaim, AdjudicationResult, ClaimType, AdmissibilityPolicy } from './types/genstate';
+import type {
+  StateClaim,
+  EvidenceRecord,
+  AdjudicationResult,
+  ProtocolStats,
+  ClaimType,
+  AdmissibilityPolicy,
+} from './types/genstate';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<'explorer' | 'declare' | 'evidence' | 'adjudicate' | 'docs'>('explorer');
-  const [claims, setClaims] = useState<StateClaim[]>(() => genStateService.getClaims());
-  const [selectedClaimId, setSelectedClaimId] = useState<string>(claims[0]?.id || 'CLAIM-1');
+  const [claims, setClaims] = useState<StateClaim[]>([]);
+  const [selectedClaimId, setSelectedClaimId] = useState<string>('');
+  const [stats, setStats] = useState<ProtocolStats | null>(null);
+  const [selectedEvidence, setSelectedEvidence] = useState<EvidenceRecord[]>([]);
+  const [selectedAdjudication, setSelectedAdjudication] = useState<AdjudicationResult | null>(null);
+
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPolicy, setFilterPolicy] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
-  
+
   // Wallet State
-  const [walletConnected, setWalletConnected] = useState(false);
-  const [walletAddress, setWalletAddress] = useState('0x85540C23062a71BE0eF8990924FE4A13d5f510a3');
-  const [walletBalance, setWalletBalance] = useState('1.0000 GEN');
+  const [walletConnected, setWalletConnected] = useState(true);
+  const [walletAddress, setWalletAddress] = useState<string>('');
+  const [walletBalance, setWalletBalance] = useState('0.0000 GEN');
   const [copyFeedback, setCopyFeedback] = useState(false);
 
   // Declare Form State
@@ -45,28 +60,76 @@ export function App() {
   const [newReferenceDate, setNewReferenceDate] = useState(new Date().toISOString().split('T')[0]);
   const [newPolicy, setNewPolicy] = useState<AdmissibilityPolicy>('OFFICIAL_REGISTRY');
   const [freezeImmediately, setFreezeImmediately] = useState(true);
-  const [declareSuccess, setDeclareSuccess] = useState<string | null>(null);
+  const [isDeclaring, setIsDeclaring] = useState(false);
+  const [declareSuccess, setDeclareSuccess] = useState<{ txHash: string; claimId: string } | null>(null);
 
   // Evidence Form State
-  const [targetClaimId, setTargetClaimId] = useState<string>(claims[0]?.id || 'CLAIM-1');
+  const [targetClaimId, setTargetClaimId] = useState<string>('');
   const [sourceUrl, setSourceUrl] = useState('');
   const [explanation, setExplanation] = useState('');
-  const [evidenceSuccess, setEvidenceSuccess] = useState<string | null>(null);
+  const [isSubmittingEvidence, setIsSubmittingEvidence] = useState(false);
+  const [evidenceSuccess, setEvidenceSuccess] = useState<{ txHash: string } | null>(null);
 
   // Adjudication Console State
-  const [adjClaimId, setAdjClaimId] = useState<string>(claims[1]?.id || 'CLAIM-2');
+  const [adjClaimId, setAdjClaimId] = useState<string>('');
   const [isAdjudicating, setIsAdjudicating] = useState(false);
-  const [adjudicationSuccess, setAdjudicationSuccess] = useState<AdjudicationResult | null>(null);
+  const [adjudicationSuccess, setAdjudicationSuccess] = useState<{ txHash: string; verdict: string } | null>(null);
 
-  // Refresh helper
-  const refreshData = () => {
-    setClaims(genStateService.getClaims());
+  // Load Real Data from StudioNet
+  const loadBlockchainData = async (silent = false) => {
+    if (!silent) setLoading(true);
+    setRefreshing(true);
+    try {
+      const addr = genStateService.getAccountAddress();
+      setWalletAddress(addr);
+
+      const bal = await genStateService.ensureBalance();
+      setWalletBalance(bal);
+
+      const [protocolStats, claimsList] = await Promise.all([
+        genStateService.fetchProtocolStats(),
+        genStateService.fetchClaims(0, 50),
+      ]);
+
+      setStats(protocolStats);
+      setClaims(claimsList);
+
+      if (claimsList.length > 0 && !selectedClaimId) {
+        setSelectedClaimId(claimsList[0].id);
+        setTargetClaimId(claimsList[0].id);
+        setAdjClaimId(claimsList[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to load on-chain state from StudioNet:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
+  useEffect(() => {
+    loadBlockchainData();
+  }, []);
+
+  // Fetch Evidence and Adjudication when selected claim changes
+  useEffect(() => {
+    if (!selectedClaimId) return;
+    const fetchDetails = async () => {
+      try {
+        const [evList, adjRes] = await Promise.all([
+          genStateService.fetchEvidence(selectedClaimId),
+          genStateService.fetchAdjudication(selectedClaimId),
+        ]);
+        setSelectedEvidence(evList);
+        setSelectedAdjudication(adjRes);
+      } catch (e) {
+        console.error('Error fetching claim details:', e);
+      }
+    };
+    fetchDetails();
+  }, [selectedClaimId]);
+
   const selectedClaim = claims.find((c) => c.id === selectedClaimId);
-  const selectedEvidence = selectedClaim ? genStateService.getEvidence(selectedClaim.id) : [];
-  const selectedAdjudication = selectedClaim ? genStateService.getAdjudication(selectedClaim.id) : undefined;
-  const stats = genStateService.getStats();
 
   const handleCopyContract = () => {
     navigator.clipboard.writeText(GENSTATE_CONFIG.contractAddress);
@@ -74,95 +137,93 @@ export function App() {
     setTimeout(() => setCopyFeedback(false), 2000);
   };
 
-  const handleConnectWallet = () => {
+  const handleConnectWallet = async () => {
     if (walletConnected) {
       setWalletConnected(false);
     } else {
       setWalletConnected(true);
-      setWalletAddress('0x85540C23062a71BE0eF8990924FE4A13d5f510a3');
-      setWalletBalance('1.0000 GEN');
+      const bal = await genStateService.ensureBalance();
+      setWalletBalance(bal);
     }
   };
 
-  // Declare Handler
-  const handleDeclareSubmit = (e: React.FormEvent) => {
+  // Real On-Chain Declare Handler
+  const handleDeclareSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubject || !newPredicate || !newAssertedValue) return;
 
+    setIsDeclaring(true);
+    setDeclareSuccess(null);
+
     try {
-      const claim = genStateService.declareClaim(
+      const res = await genStateService.declareClaim(
         newClaimType,
         newSubject,
         newPredicate,
         newAssertedValue,
-        newReferenceDate,
-        walletAddress
+        newReferenceDate
       );
 
       if (freezeImmediately) {
-        genStateService.freezeClaim(claim.id, newPolicy, 86400);
+        await genStateService.freezeClaim(res.claimId, newPolicy, 86400);
       }
 
-      refreshData();
-      setSelectedClaimId(claim.id);
-      setDeclareSuccess(`Claim ${claim.id} declared successfully!`);
+      setDeclareSuccess(res);
       setNewSubject('');
       setNewPredicate('');
       setNewAssertedValue('');
-      setTimeout(() => {
-        setDeclareSuccess(null);
-        setActiveTab('explorer');
-      }, 1500);
+      await loadBlockchainData(true);
+      setSelectedClaimId(res.claimId);
     } catch (err: any) {
-      alert(`Declaration error: ${err.message}`);
+      alert(`On-chain transaction error: ${err.message || err}`);
+    } finally {
+      setIsDeclaring(false);
     }
   };
 
-  // Submit Evidence Handler
-  const handleEvidenceSubmit = (e: React.FormEvent) => {
+  // Real On-Chain Submit Evidence Handler
+  const handleEvidenceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sourceUrl || !explanation) return;
+    if (!sourceUrl || !explanation || !targetClaimId) return;
+
+    setIsSubmittingEvidence(true);
+    setEvidenceSuccess(null);
 
     try {
-      const record = genStateService.submitEvidence(
-        targetClaimId,
-        sourceUrl,
-        explanation,
-        walletAddress
-      );
-      refreshData();
-      setEvidenceSuccess(`Evidence ${record.id} attached to ${targetClaimId}!`);
+      const res = await genStateService.submitEvidence(targetClaimId, sourceUrl, explanation);
+      setEvidenceSuccess(res);
       setSourceUrl('');
       setExplanation('');
-      setTimeout(() => setEvidenceSuccess(null), 3000);
+      await loadBlockchainData(true);
+      if (selectedClaimId === targetClaimId) {
+        const evs = await genStateService.fetchEvidence(targetClaimId);
+        setSelectedEvidence(evs);
+      }
     } catch (err: any) {
-      alert(`Evidence error: ${err.message}`);
+      alert(`Evidence submission error: ${err.message || err}`);
+    } finally {
+      setIsSubmittingEvidence(false);
     }
   };
 
-  // Run Adjudication Handler
-  const handleRunAdjudication = (claimId: string) => {
+  // Real On-Chain Run Adjudication Handler
+  const handleRunAdjudication = async (claimId: string) => {
     setIsAdjudicating(true);
     setAdjudicationSuccess(null);
 
-    setTimeout(() => {
-      const evs = genStateService.getEvidence(claimId);
-      
-      let verdict = 'CONFIRMED';
-      let reason = 'Validator consensus established that public web records confirm the asserted state.';
-      let confidence = 95;
-
-      if (evs.length === 0) {
-        verdict = 'INSUFFICIENT_EVIDENCE';
-        reason = 'No evidence records submitted during the open window.';
-        confidence = 40;
+    try {
+      const res = await genStateService.adjudicateClaim(claimId);
+      setAdjudicationSuccess(res);
+      await loadBlockchainData(true);
+      if (selectedClaimId === claimId) {
+        const adj = await genStateService.fetchAdjudication(claimId);
+        setSelectedAdjudication(adj);
       }
-
-      const result = genStateService.adjudicateClaim(claimId, verdict, reason, confidence);
-      refreshData();
+    } catch (err: any) {
+      alert(`Adjudication error: ${err.message || err}`);
+    } finally {
       setIsAdjudicating(false);
-      setAdjudicationSuccess(result);
-    }, 2400);
+    }
   };
 
   // Filtered claims
@@ -194,6 +255,16 @@ export function App() {
           </div>
 
           <div className="nav-actions">
+            <button
+              onClick={() => loadBlockchainData(true)}
+              className="network-pill"
+              style={{ cursor: 'pointer', background: 'rgba(255, 255, 255, 0.05)', color: '#38bdf8' }}
+              title="Refresh from StudioNet"
+            >
+              <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+              <span>Sync Chain</span>
+            </button>
+
             <div className="network-pill">
               <span className="status-dot"></span>
               <span>StudioNet (Chain {GENSTATE_CONFIG.chainId})</span>
@@ -240,16 +311,16 @@ export function App() {
 
       {/* Main Container */}
       <main className="app-container">
-        {/* Telemetry Grid */}
+        {/* Real Telemetry Grid */}
         <section className="telemetry-grid">
           <div className="telemetry-card">
             <div className="telemetry-header">
-              <span className="telemetry-label">Active State Claims</span>
+              <span className="telemetry-label">On-Chain State Claims</span>
               <Layers size={18} className="telemetry-icon" />
             </div>
-            <div className="telemetry-value">{stats.total_claims}</div>
+            <div className="telemetry-value">{stats ? stats.total_claims : '--'}</div>
             <div className="telemetry-sub">
-              <span>Across {stats.supported_claim_types.length} domain categories</span>
+              <span>Direct from StudioNet RPC</span>
             </div>
           </div>
 
@@ -259,10 +330,10 @@ export function App() {
               <FileCheck2 size={18} className="telemetry-icon" style={{ color: '#06b6d4' }} />
             </div>
             <div className="telemetry-value" style={{ color: '#06b6d4' }}>
-              {stats.total_evidence}
+              {stats ? stats.total_evidence : '--'}
             </div>
             <div className="telemetry-sub">
-              <span>Indexed web & filing sources</span>
+              <span>Indexed on-chain records</span>
             </div>
           </div>
 
@@ -272,10 +343,10 @@ export function App() {
               <Coins size={18} className="telemetry-icon" style={{ color: '#fbbf24' }} />
             </div>
             <div className="telemetry-value" style={{ color: '#fbbf24' }}>
-              {(Number(stats.total_escrowed) / 1e18).toFixed(2)} GEN
+              {stats ? (Number(stats.total_escrowed) / 1e18).toFixed(2) : '0.00'} GEN
             </div>
             <div className="telemetry-sub">
-              <span>Staked for truth verification</span>
+              <span>Settlement truth pool</span>
             </div>
           </div>
 
@@ -285,10 +356,10 @@ export function App() {
               <ShieldCheck size={18} className="telemetry-icon" style={{ color: '#10b981' }} />
             </div>
             <div className="telemetry-value" style={{ color: '#10b981' }}>
-              100%
+              Active
             </div>
             <div className="telemetry-sub">
-              <span>5 of 5 quorum on StudioNet</span>
+              <span>Equivalence Quorum Verified</span>
             </div>
           </div>
         </section>
@@ -332,8 +403,16 @@ export function App() {
           </button>
         </div>
 
+        {/* Loading Indicator */}
+        {loading && (
+          <div className="glass-panel" style={{ textAlign: 'center', padding: '36px' }}>
+            <Loader2 size={32} className="animate-spin" style={{ margin: '0 auto 12px', color: '#10b981' }} />
+            <p style={{ color: '#94a3b8' }}>Querying live contract state on GenLayer StudioNet...</p>
+          </div>
+        )}
+
         {/* TAB 1: EXPLORER */}
-        {activeTab === 'explorer' && (
+        {!loading && activeTab === 'explorer' && (
           <div className="content-layout">
             <div>
               {/* Filter Bar */}
@@ -360,6 +439,7 @@ export function App() {
                     <option value="REGULATORY_FILING">Regulatory Filing</option>
                     <option value="MULTI_SOURCE_INDEPENDENT">Multi-Source</option>
                     <option value="PRIMARY_PLUS_CORROBORATION">Primary + Corroboration</option>
+                    <option value="OPEN_PUBLIC">Open Public</option>
                   </select>
 
                   <select
@@ -410,6 +490,9 @@ export function App() {
                               <span className="badge badge-amber">
                                 <Activity size={12} /> OPEN FOR EVIDENCE
                               </span>
+                            )}
+                            {c.status === 'DRAFT' && (
+                              <span className="badge badge-muted">DRAFT</span>
                             )}
                           </div>
                         </div>
@@ -518,7 +601,7 @@ export function App() {
                     </div>
                     {selectedEvidence.length === 0 ? (
                       <p style={{ fontSize: '12px', color: '#64748b' }}>
-                        No evidence records attached yet. Submit evidence to trigger consensus.
+                        No evidence records attached yet on-chain. Submit evidence to trigger consensus.
                       </p>
                     ) : (
                       selectedEvidence.map((ev) => (
@@ -570,7 +653,7 @@ export function App() {
                 </div>
               ) : (
                 <div className="detail-drawer" style={{ textAlign: 'center', color: '#64748b' }}>
-                  Select a state claim to view details
+                  Select a state claim to inspect details
                 </div>
               )}
             </div>
@@ -582,9 +665,9 @@ export function App() {
           <div className="glass-panel" style={{ maxWidth: '780px', margin: '0 auto' }}>
             <div className="panel-header">
               <div>
-                <h2 className="panel-title">Declare Verifiable State Claim</h2>
+                <h2 className="panel-title">Declare Verifiable State Claim (On-Chain)</h2>
                 <p className="panel-desc">
-                  Register a structured truth assertion and bind it to an immutable evidence admissibility policy.
+                  Broadcasts a real transaction to the deployed GenState contract on StudioNet.
                 </p>
               </div>
             </div>
@@ -595,16 +678,18 @@ export function App() {
                   background: 'rgba(16, 185, 129, 0.15)',
                   border: '1px solid #10b981',
                   color: '#34d399',
-                  padding: '12px 16px',
+                  padding: '14px 18px',
                   borderRadius: '8px',
                   marginBottom: '20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
                 }}
               >
-                <CheckCircle2 size={18} />
-                <span>{declareSuccess}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700' }}>
+                  <CheckCircle2 size={18} />
+                  <span>On-Chain Claim Created: {declareSuccess.claimId}</span>
+                </div>
+                <div style={{ fontSize: '12px', marginTop: '6px', wordBreak: 'break-all' }}>
+                  Tx Hash: {declareSuccess.txHash}
+                </div>
               </div>
             )}
 
@@ -629,7 +714,7 @@ export function App() {
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Acme Corp Acquisition / Patent Filing 99120"
+                  placeholder="e.g. Delaware Entity Registry #749102 / OpenZeppelin v5.0 Audit"
                   value={newSubject}
                   onChange={(e) => setNewSubject(e.target.value)}
                   required
@@ -643,12 +728,12 @@ export function App() {
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="e.g. status_is_approved"
+                    placeholder="e.g. audit_certified_zero_critical_vulnerabilities"
                     value={newPredicate}
                     onChange={(e) => setNewPredicate(e.target.value)}
                     required
                   />
-                  <div className="form-help">Structured attribute to be checked.</div>
+                  <div className="form-help">Structured attribute to be verified.</div>
                 </div>
 
                 <div className="form-group">
@@ -656,7 +741,7 @@ export function App() {
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="e.g. Approved / True / 100%"
+                    placeholder="e.g. TRUE / CERTIFIED"
                     value={newAssertedValue}
                     onChange={(e) => setNewAssertedValue(e.target.value)}
                     required
@@ -702,12 +787,26 @@ export function App() {
                   style={{ width: '16px', height: '16px', accentColor: '#10b981' }}
                 />
                 <label htmlFor="freezeCheck" style={{ fontSize: '13px', color: '#cbd5e1', cursor: 'pointer' }}>
-                  Freeze claim immediately and open evidence window (86,400s)
+                  Freeze claim on-chain immediately and open evidence submission window
                 </label>
               </div>
 
-              <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '12px' }}>
-                <Lock size={16} /> Broadcast On-Chain Assertion
+              <button
+                type="submit"
+                disabled={isDeclaring}
+                className="btn-primary"
+                style={{ width: '100%', marginTop: '12px' }}
+              >
+                {isDeclaring ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Broadcasting & Awaiting Validator Consensus...</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock size={16} /> Broadcast On-Chain Assertion to StudioNet
+                  </>
+                )}
               </button>
             </form>
           </div>
@@ -718,7 +817,7 @@ export function App() {
           <div className="glass-panel" style={{ maxWidth: '780px', margin: '0 auto' }}>
             <div className="panel-header">
               <div>
-                <h2 className="panel-title">Submit Evidence Record</h2>
+                <h2 className="panel-title">Submit Evidence Record (On-Chain)</h2>
                 <p className="panel-desc">
                   Supply public web URLs and documentation to prove or refute frozen state assertions.
                 </p>
@@ -731,16 +830,18 @@ export function App() {
                   background: 'rgba(6, 182, 212, 0.15)',
                   border: '1px solid #06b6d4',
                   color: '#38bdf8',
-                  padding: '12px 16px',
+                  padding: '14px 18px',
                   borderRadius: '8px',
                   marginBottom: '20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
                 }}
               >
-                <CheckCircle2 size={18} />
-                <span>{evidenceSuccess}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700' }}>
+                  <CheckCircle2 size={18} />
+                  <span>Evidence Finalized on StudioNet!</span>
+                </div>
+                <div style={{ fontSize: '12px', marginTop: '6px', wordBreak: 'break-all' }}>
+                  Tx Hash: {evidenceSuccess.txHash}
+                </div>
               </div>
             )}
 
@@ -752,11 +853,15 @@ export function App() {
                   value={targetClaimId}
                   onChange={(e) => setTargetClaimId(e.target.value)}
                 >
-                  {claims.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.id} - {c.subject} ({c.status})
-                    </option>
-                  ))}
+                  {claims.length === 0 ? (
+                    <option value="">No claims found on-chain</option>
+                  ) : (
+                    claims.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.id} - {c.subject} ({c.status})
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 
@@ -765,7 +870,7 @@ export function App() {
                 <input
                   type="url"
                   className="form-input"
-                  placeholder="https://example.com/record/official-filing"
+                  placeholder="https://github.com/OpenZeppelin/openzeppelin-contracts/releases/tag/v5.0.0"
                   value={sourceUrl}
                   onChange={(e) => setSourceUrl(e.target.value)}
                   required
@@ -778,15 +883,29 @@ export function App() {
                 <textarea
                   className="form-textarea"
                   rows={4}
-                  placeholder="Explain exactly what this link demonstrates regarding the predicate..."
+                  placeholder="Provide objective proof and source excerpt linking this URL to the asserted state predicate..."
                   value={explanation}
                   onChange={(e) => setExplanation(e.target.value)}
                   required
                 />
               </div>
 
-              <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '8px' }}>
-                <Send size={16} /> Attach Evidence to State Machine
+              <button
+                type="submit"
+                disabled={isSubmittingEvidence || !targetClaimId}
+                className="btn-primary"
+                style={{ width: '100%', marginTop: '8px' }}
+              >
+                {isSubmittingEvidence ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Broadcasting Evidence Transaction to StudioNet...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send size={16} /> Broadcast Evidence Transaction
+                  </>
+                )}
               </button>
             </form>
           </div>
@@ -797,9 +916,9 @@ export function App() {
           <div className="glass-panel" style={{ maxWidth: '820px', margin: '0 auto' }}>
             <div className="panel-header">
               <div>
-                <h2 className="panel-title">Multi-Validator Adjudication Console</h2>
+                <h2 className="panel-title">Multi-Validator Adjudication Console (Live Consensus)</h2>
                 <p className="panel-desc">
-                  Trigger non-deterministic LLM consensus and evaluate frozen state assertions against submitted evidence.
+                  Executes the intelligent contract's <code>adjudicate()</code> method on GenLayer StudioNet.
                 </p>
               </div>
             </div>
@@ -814,11 +933,15 @@ export function App() {
                   setAdjudicationSuccess(null);
                 }}
               >
-                {claims.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.id} - {c.subject} (Evidence: {c.evidence_count}, Status: {c.status})
-                  </option>
-                ))}
+                {claims.length === 0 ? (
+                  <option value="">No claims found on-chain</option>
+                ) : (
+                  claims.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.id} - {c.subject} (Evidence: {c.evidence_count}, Status: {c.status})
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
@@ -840,12 +963,15 @@ export function App() {
                     <span style={{ fontFamily: 'var(--font-mono)', color: '#06b6d4', fontWeight: '700' }}>
                       {currentClaim.id}
                     </span>
-                    <span className="badge badge-cyan">{currentClaim.source_policy}</span>
+                    <span className="badge badge-cyan">{currentClaim.source_policy || 'Policy Pending'}</span>
                   </div>
                   <h4 style={{ fontSize: '16px', fontWeight: '700' }}>{currentClaim.subject}</h4>
                   <div style={{ fontSize: '13px', color: '#94a3b8', marginTop: '6px' }}>
                     Predicate: <strong style={{ color: '#10b981' }}>{currentClaim.predicate}</strong> ➔{' '}
                     <strong style={{ color: '#f8fafc' }}>{currentClaim.asserted_value}</strong>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
+                    Status: <strong>{currentClaim.status}</strong> | Evidence Records: <strong>{currentClaim.evidence_count}</strong>
                   </div>
                 </div>
               );
@@ -853,19 +979,19 @@ export function App() {
 
             <button
               onClick={() => handleRunAdjudication(adjClaimId)}
-              disabled={isAdjudicating}
+              disabled={isAdjudicating || !adjClaimId}
               className="btn-primary"
               style={{ width: '100%', marginBottom: '24px' }}
             >
               {isAdjudicating ? (
                 <>
                   <Sparkles size={16} className="animate-spin" />
-                  <span>GenVM Validators Agreeing Quorum (Leader & Equivalence)...</span>
+                  <span>GenLayer Validators Performing Consensus Round on StudioNet...</span>
                 </>
               ) : (
                 <>
                   <Scale size={16} />
-                  <span>Execute Multi-Validator Consensus Round</span>
+                  <span>Trigger Multi-Validator LLM Consensus Transaction</span>
                 </>
               )}
             </button>
@@ -884,31 +1010,13 @@ export function App() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <CheckCircle2 size={24} color="#10b981" />
                     <span style={{ fontSize: '18px', fontWeight: '800', color: '#10b981' }}>
-                      VERDICT: {adjudicationSuccess.verdict}
+                      ON-CHAIN VERDICT: {adjudicationSuccess.verdict}
                     </span>
                   </div>
-                  <span className="badge badge-emerald">
-                    {adjudicationSuccess.confidence_score}% Consensus Score
-                  </span>
                 </div>
 
-                <p style={{ marginTop: '12px', fontSize: '14px', lineHeight: '1.6', color: '#f8fafc' }}>
-                  {adjudicationSuccess.reason}
-                </p>
-
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    marginTop: '16px',
-                    paddingTop: '12px',
-                    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-                    fontSize: '12px',
-                    color: '#94a3b8',
-                  }}
-                >
-                  <span>Evaluated Evidence Sources: {adjudicationSuccess.evidence_count}</span>
-                  <span>Equivalence Principle: Comparative Verdict Match</span>
+                <div style={{ marginTop: '12px', fontSize: '13px', color: '#94a3b8', wordBreak: 'break-all' }}>
+                  Consensus Tx Hash: {adjudicationSuccess.txHash}
                 </div>
               </div>
             )}
@@ -929,12 +1037,11 @@ export function App() {
 
             <div style={{ lineHeight: '1.7', fontSize: '14px', color: '#cbd5e1' }}>
               <h3 style={{ color: '#10b981', fontSize: '16px', marginBottom: '8px' }}>
-                1. Separation of Assertion and Evidence
+                1. Real On-Chain Execution
               </h3>
               <p style={{ marginBottom: '16px' }}>
-                State claims are declared and frozen before evidence is submitted. This prevents retrospective
-                reinterpretation by claim creators and guarantees that validators evaluate submissions strictly
-                against the predefined predicate.
+                Every action in this terminal executes live smart contract calls via <code>genlayer-js</code> to
+                the GenState contract deployed on StudioNet. No mock arrays, no simulated storage, and no dummy timers.
               </p>
 
               <h3 style={{ color: '#06b6d4', fontSize: '16px', marginBottom: '8px' }}>
