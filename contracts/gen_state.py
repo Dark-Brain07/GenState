@@ -56,7 +56,6 @@ ALLOWED_VERDICTS = [
 ]
 
 
-@gl.contract
 class GenState(gl.Contract):
     admin: Address
     claim_count: u256
@@ -71,7 +70,7 @@ class GenState(gl.Contract):
     total_bounties_paid: u256
 
     def __init__(self):
-        self.admin = gl.message.sender_account
+        self.admin = gl.message.sender_address
         self.claim_count = u256(0)
         self.evidence_count = u256(0)
         self.total_bounties_escrowed = u256(0)
@@ -82,12 +81,12 @@ class GenState(gl.Contract):
     # --------------------------------------------------------------------------
 
     def _require_admin(self):
-        if gl.message.sender_account != self.admin:
-            raise gl.UserError("Only protocol admin can call this method")
+        if gl.message.sender_address != self.admin:
+            raise gl.vm.UserError("Only protocol admin can call this method")
 
     def _get_claim_dict(self, claim_id: str) -> dict:
         if claim_id not in self.claims:
-            raise gl.UserError(f"Claim with id '{claim_id}' not found")
+            raise gl.vm.UserError(f"Claim with id '{claim_id}' not found")
         return json.loads(self.claims[claim_id])
 
     def _save_claim_dict(self, claim_id: str, data: dict):
@@ -117,7 +116,7 @@ class GenState(gl.Contract):
         """Register a new structured state assertion in DRAFT status."""
         c_type = claim_type.strip().upper()
         if c_type not in CLAIM_TYPES:
-            raise gl.UserError(
+            raise gl.vm.UserError(
                 f"Invalid claim type '{claim_type}'. Allowed: {', '.join(CLAIM_TYPES)}"
             )
 
@@ -126,11 +125,11 @@ class GenState(gl.Contract):
         val = asserted_value.strip()
 
         if len(subj) < 3 or len(subj) > 300:
-            raise gl.UserError("Subject must be between 3 and 300 characters")
+            raise gl.vm.UserError("Subject must be between 3 and 300 characters")
         if len(pred) < 3 or len(pred) > 200:
-            raise gl.UserError("Predicate must be between 3 and 200 characters")
+            raise gl.vm.UserError("Predicate must be between 3 and 200 characters")
         if len(val) < 1 or len(val) > 500:
-            raise gl.UserError(
+            raise gl.vm.UserError(
                 "Asserted value must be between 1 and 500 characters"
             )
 
@@ -140,7 +139,7 @@ class GenState(gl.Contract):
 
         claim_data = {
             "id": claim_id,
-            "creator": str(gl.message.sender_account),
+            "creator": str(gl.message.sender_address),
             "claim_type": c_type,
             "subject": subj,
             "predicate": pred,
@@ -170,16 +169,16 @@ class GenState(gl.Contract):
         """Lock the claim parameters and open the window for public evidence submission."""
         claim = self._get_claim_dict(claim_id)
 
-        if str(gl.message.sender_account).lower() != claim["creator"].lower():
-            raise gl.UserError("Only the claim creator can freeze this claim")
+        if str(gl.message.sender_address).lower() != claim["creator"].lower():
+            raise gl.vm.UserError("Only the claim creator can freeze this claim")
         if claim["status"] != STATE_DRAFT:
-            raise gl.UserError(
+            raise gl.vm.UserError(
                 f"Claim is in status '{claim['status']}', expected '{STATE_DRAFT}'"
             )
 
         pol = source_policy.strip().upper()
         if pol not in POLICIES:
-            raise gl.UserError(
+            raise gl.vm.UserError(
                 f"Invalid source policy '{source_policy}'. Allowed: {', '.join(POLICIES)}"
             )
 
@@ -195,7 +194,7 @@ class GenState(gl.Contract):
         """Fund an escrowed bounty reward for evidence providers and adjudication settlement."""
         claim = self._get_claim_dict(claim_id)
         if claim["status"] in [STATE_RESOLVED, STATE_SETTLED, STATE_CANCELLED]:
-            raise gl.UserError(
+            raise gl.vm.UserError(
                 f"Cannot fund bounty on claim with status '{claim['status']}'"
             )
 
@@ -222,19 +221,19 @@ class GenState(gl.Contract):
         claim = self._get_claim_dict(claim_id)
 
         if claim["status"] not in [STATE_EVIDENCE_OPEN, STATE_ADJUDICATING]:
-            raise gl.UserError(
+            raise gl.vm.UserError(
                 f"Evidence submission not open for claim with status '{claim['status']}'"
             )
 
         url = source_url.strip()
         if not (url.startswith("http://") or url.startswith("https://")):
-            raise gl.UserError("Source URL must begin with http:// or https://")
+            raise gl.vm.UserError("Source URL must begin with http:// or https://")
         if len(url) > 500:
-            raise gl.UserError("Source URL exceeds maximum 500 characters")
+            raise gl.vm.UserError("Source URL exceeds maximum 500 characters")
 
         notes = explanation.strip()
         if len(notes) < 5 or len(notes) > 1000:
-            raise gl.UserError("Explanation must be between 5 and 1000 characters")
+            raise gl.vm.UserError("Explanation must be between 5 and 1000 characters")
 
         new_ev_count = int(self.evidence_count) + 1
         self.evidence_count = u256(new_ev_count)
@@ -243,7 +242,7 @@ class GenState(gl.Contract):
         ev_data = {
             "id": evidence_id,
             "claim_id": claim_id,
-            "submitter": str(gl.message.sender_account),
+            "submitter": str(gl.message.sender_address),
             "source_url": url,
             "explanation": notes,
         }
@@ -269,13 +268,13 @@ class GenState(gl.Contract):
         claim = self._get_claim_dict(claim_id)
 
         if claim["status"] not in [STATE_EVIDENCE_OPEN, STATE_ADJUDICATING]:
-            raise gl.UserError(
+            raise gl.vm.UserError(
                 f"Cannot adjudicate claim in status '{claim['status']}'"
             )
 
         ev_ids = self._get_evidence_list(claim_id)
         if len(ev_ids) == 0:
-            raise gl.UserError(
+            raise gl.vm.UserError(
                 "Cannot adjudicate claim without at least one submitted evidence record"
             )
 
@@ -420,7 +419,7 @@ You MUST respond strictly with a valid JSON object with the following schema:
         """
         claim = self._get_claim_dict(claim_id)
         if claim["status"] != STATE_RESOLVED:
-            raise gl.UserError(
+            raise gl.vm.UserError(
                 f"Cannot settle bounty on claim in status '{claim['status']}', must be '{STATE_RESOLVED}'"
             )
 
@@ -444,10 +443,10 @@ You MUST respond strictly with a valid JSON object with the following schema:
     def cancel_claim(self, claim_id: str) -> str:
         """Cancel a claim if still in DRAFT status."""
         claim = self._get_claim_dict(claim_id)
-        if str(gl.message.sender_account).lower() != claim["creator"].lower():
-            raise gl.UserError("Only creator can cancel")
+        if str(gl.message.sender_address).lower() != claim["creator"].lower():
+            raise gl.vm.UserError("Only creator can cancel")
         if claim["status"] != STATE_DRAFT:
-            raise gl.UserError("Cannot cancel an active or frozen claim")
+            raise gl.vm.UserError("Cannot cancel an active or frozen claim")
 
         claim["status"] = STATE_CANCELLED
         self._save_claim_dict(claim_id, claim)

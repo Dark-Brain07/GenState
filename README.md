@@ -12,11 +12,11 @@ GenState is an intelligent state consensus protocol built natively on GenLayer's
 | :--- | :--- |
 | **Network** | **GenLayer StudioNet** (Chain ID: `4224`) |
 | **Contract Name** | `GenState` |
-| **Deployed Contract Address** | [`0xae97EC507454Db2ABA53ef53cA97b7F308801cb1`](https://explorer-studio.genlayer.com/address/0xae97EC507454Db2ABA53ef53cA97b7F308801cb1) |
-| **Deployment Transaction Hash** | `0x9e02d698082b22e847d5c292ab59a2f997cb8aa72a70a364579241fdfee54b89` |
-| **Genesis Attestation Tx Hash** | `0x3157648fa5cdbc222e568b372d760490f5e0f7fbbe372db641f868a8fc91a262` |
-| **Consensus Round** | Round 0 (Finalized with 5/5 validator quorum) |
-| **Explorer Link** | [View on GenLayer Studio Explorer](https://explorer-studio.genlayer.com/address/0xae97EC507454Db2ABA53ef53cA97b7F308801cb1) |
+| **Deployed Contract Address** | [`0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28`](https://explorer-studio.genlayer.com/address/0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28) |
+| **Deployment Transaction Hash** | `0x6f3a36dd106c295e7a1b7c8dc097f817ad0b59b860a8c0649c08c8030bc8e93f` |
+| **Genesis Write Transaction Hash** | `0xf74536424a92c9c8e2311cea3357d58552df557593662e521bb3cc2f41f572d4` |
+| **Consensus Finality** | Finalized (Status: 7, 5/5 validator quorum agree) |
+| **Explorer Link** | [View on GenLayer Studio Explorer](https://explorer-studio.genlayer.com/address/0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28) |
 
 ---
 
@@ -116,3 +116,4 @@ Open `http://localhost:5173/` in your browser.
 - **Pinned Runner**: Pinned to `# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }`.
 - **Zero Revert Web Fallback**: External network queries gracefully downgrade without reverting transactions.
 - **Strict AST Sandbox**: Exclusively uses `from genlayer import *` and `import json` with zero forbidden standard libraries.
+- **Active On-Chain Verified**: Confirmed with live read/write transactions on GenLayer StudioNet.

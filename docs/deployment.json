@@ -2,9 +2,9 @@
   "network": "studionet",
   "chain_id": 61999,
   "contract_name": "GenState",
-  "contract_address": "0xae97EC507454Db2ABA53ef53cA97b7F308801cb1",
-  "deploy_tx_hash": "0x9e02d698082b22e847d5c292ab59a2f997cb8aa72a70a364579241fdfee54b89",
-  "deployer_address": "0x9463103F0F1fC9472e097AfF5d33f2Bd29eaFA60",
-  "explorer_url": "https://explorer-studio.genlayer.com/address/0xae97EC507454Db2ABA53ef53cA97b7F308801cb1",
-  "timestamp": "2026-10-13T02:28:05Z"
+  "contract_address": "0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28",
+  "deploy_tx_hash": "0x6f3a36dd106c295e7a1b7c8dc097f817ad0b59b860a8c0649c08c8030bc8e93f",
+  "deployer_address": "0x85540C23062a71BE0eF8990924FE4A13d5f510a3",
+  "explorer_url": "https://explorer-studio.genlayer.com/address/0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28",
+  "timestamp": "2026-10-13T02:49:06Z"
 }
