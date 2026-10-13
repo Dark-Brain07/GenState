@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Loader2,
 } from 'lucide-react';
+import genstateLogo from './assets/genstate-logo.jpg';
 import { GENSTATE_CONFIG } from './lib/config';
 import { genStateService } from './lib/genstate-service';
 import type {
@@ -244,7 +245,7 @@ export function App() {
         <div className="nav-inner">
           <div className="nav-brand">
             <div className="brand-icon-box">
-              <Scale size={24} />
+              <img src={genstateLogo} alt="GenState Protocol Emblem" className="brand-logo-img" />
             </div>
             <div>
               <div className="brand-title">
