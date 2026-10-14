@@ -21,6 +21,8 @@ import {
   BookOpen,
   RefreshCw,
   Loader2,
+  AlertTriangle,
+  Award,
 } from 'lucide-react';
 import genstateLogo from './assets/genstate-logo.jpg';
 import { GENSTATE_CONFIG } from './lib/config';
@@ -76,8 +78,19 @@ export function App() {
 
   // Adjudication Console State
   const [adjClaimId, setAdjClaimId] = useState<string>('');
-  const [isAdjudicating, setIsAdjudicating] = useState(false);
+  const [isAdjudicating, setIsAdjudicating] = useState<boolean>(false);
   const [adjudicationSuccess, setAdjudicationSuccess] = useState<{ txHash: string; verdict: string } | null>(null);
+
+  // Network Guard & Financial Settlement State
+  const [isWrongNetwork, setIsWrongNetwork] = useState<boolean>(false);
+  const [showFundModal, setShowFundModal] = useState<boolean>(false);
+  const [fundAmountGen, setFundAmountGen] = useState<string>('0.2');
+  const [isFunding, setIsFunding] = useState<boolean>(false);
+  const [showSettleModal, setShowSettleModal] = useState<boolean>(false);
+  const [selectedRecipient, setSelectedRecipient] = useState<string>('');
+  const [isSettling, setIsSettling] = useState<boolean>(false);
+  const [isRefunding, setIsRefunding] = useState<boolean>(false);
+  const [isCancelling, setIsCancelling] = useState<boolean>(false);
 
   // Load Real Data from StudioNet
   const loadBlockchainData = async (silent = false) => {
@@ -170,6 +183,21 @@ export function App() {
     if (typeof window === 'undefined' || !(window as any).ethereum) return;
     const ethereum = (window as any).ethereum;
 
+    const checkNetwork = async () => {
+      if (typeof window !== 'undefined' && (window as any).ethereum && walletConnected && genStateService.getConnectedType() === 'browser') {
+        try {
+          const chainId = await (window as any).ethereum.request({ method: 'eth_chainId' });
+          const isStudioNet = chainId === '0xf22f' || chainId === '61999' || chainId === 61999;
+          setIsWrongNetwork(!isStudioNet);
+        } catch {
+          setIsWrongNetwork(false);
+        }
+      } else {
+        setIsWrongNetwork(false);
+      }
+    };
+    checkNetwork();
+
     const handleAccountsChanged = async (accounts: string[]) => {
       if (accounts.length === 0) {
         handleDisconnect();
@@ -177,10 +205,12 @@ export function App() {
         setWalletAddress(accounts[0]);
         const bal = await genStateService.ensureBalance();
         setWalletBalance(bal);
+        await checkNetwork();
       }
     };
 
     const handleChainChanged = async () => {
+      await checkNetwork();
       if (walletConnected) {
         const bal = await genStateService.ensureBalance();
         setWalletBalance(bal);
@@ -195,6 +225,75 @@ export function App() {
       ethereum.removeListener?.('chainChanged', handleChainChanged);
     };
   }, [walletConnected]);
+
+  // Real On-Chain Fund Bounty Handler
+  const handleFundBountySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedClaimId || !fundAmountGen || parseFloat(fundAmountGen) <= 0) return;
+
+    setIsFunding(true);
+    try {
+      const amountWei = BigInt(Math.floor(parseFloat(fundAmountGen) * 1e18));
+      await genStateService.fundBounty(selectedClaimId, amountWei);
+      alert(`Bounty of ${fundAmountGen} GEN successfully funded into escrow!`);
+      setShowFundModal(false);
+      await loadBlockchainData(true);
+    } catch (err: any) {
+      alert(`Funding transaction error: ${err.message || err}`);
+    } finally {
+      setIsFunding(false);
+    }
+  };
+
+  // Real On-Chain Settle Bounty Handler
+  const handleSettleBountySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedClaimId || !selectedRecipient) return;
+
+    setIsSettling(true);
+    try {
+      await genStateService.settleBounty(selectedClaimId, selectedRecipient);
+      alert(`Bounty share successfully settled on-chain to ${selectedRecipient}!`);
+      setShowSettleModal(false);
+      await loadBlockchainData(true);
+    } catch (err: any) {
+      alert(`Settlement transaction error: ${err.message || err}`);
+    } finally {
+      setIsSettling(false);
+    }
+  };
+
+  // Real On-Chain Refund Bounty Handler
+  const handleRefundBounty = async (claimId: string) => {
+    if (!confirm("Are you sure you want to refund this claim's escrowed bounty to contributors?")) return;
+
+    setIsRefunding(true);
+    try {
+      await genStateService.refundBounty(claimId);
+      alert("Escrowed bounty successfully refunded to contributors on StudioNet!");
+      await loadBlockchainData(true);
+    } catch (err: any) {
+      alert(`Refund transaction error: ${err.message || err}`);
+    } finally {
+      setIsRefunding(false);
+    }
+  };
+
+  // Real On-Chain Cancel Claim Handler
+  const handleCancelClaim = async (claimId: string) => {
+    if (!confirm("Are you sure you want to cancel this DRAFT claim? Deposited GEN will be automatically refunded.")) return;
+
+    setIsCancelling(true);
+    try {
+      await genStateService.cancelClaim(claimId);
+      alert("Claim successfully cancelled and deposited GEN refunded on StudioNet!");
+      await loadBlockchainData(true);
+    } catch (err: any) {
+      alert(`Cancellation transaction error: ${err.message || err}`);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   // Real On-Chain Declare Handler
   const handleDeclareSubmit = async (e: React.FormEvent) => {
@@ -380,6 +479,37 @@ export function App() {
 
       {/* Main Container */}
       <main className="app-container">
+        {/* Network Mismatch Banner */}
+        {isWrongNetwork && (
+          <div
+            style={{
+              background: 'rgba(239, 68, 68, 0.15)',
+              border: '1px solid #ef4444',
+              borderRadius: '8px',
+              padding: '12px 18px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <AlertTriangle size={20} color="#f87171" />
+              <span style={{ fontSize: '13px', color: '#fecaca' }}>
+                <strong>Network Mismatch:</strong> Your browser wallet is not connected to GenLayer StudioNet (Chain ID 61999). Transactions will revert unless switched.
+              </span>
+            </div>
+            <button
+              className="btn-primary"
+              style={{ padding: '6px 14px', fontSize: '12px', background: '#dc2626', borderColor: '#ef4444', whiteSpace: 'nowrap' }}
+              onClick={() => genStateService.switchOrAddStudioNet()}
+            >
+              Switch to StudioNet
+            </button>
+          </div>
+        )}
+
         {/* Real Telemetry Grid */}
         <section className="telemetry-grid">
           <div className="telemetry-card">
@@ -640,6 +770,34 @@ export function App() {
                     </div>
                   </div>
 
+                  {/* Bounty & Escrow Pool Section */}
+                  <div className="drawer-section">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <div className="section-subtitle" style={{ margin: 0 }}>Native GEN Escrow Bounty</div>
+                      <button
+                        className="btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        onClick={() => setShowFundModal(true)}
+                        disabled={['SETTLED', 'CANCELLED', 'REFUNDED'].includes(selectedClaim.status)}
+                      >
+                        <Coins size={12} color="#fbbf24" /> Fund Bounty
+                      </button>
+                    </div>
+                    <div className="claim-predicate-box" style={{ background: '#0a0f1d', border: '1px solid rgba(251, 191, 36, 0.2)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>Escrowed Truth Reward:</span>
+                        <span style={{ fontSize: '16px', fontWeight: '800', color: '#fbbf24' }}>
+                          {(Number(selectedClaim.bounty_amount) / 1e18).toFixed(4)} GEN
+                        </span>
+                      </div>
+                      {selectedClaim.funders && selectedClaim.funders.length > 0 && (
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '6px' }}>
+                          Contributors: {selectedClaim.funders.length} funder(s) tracked individually
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Consensus Adjudication Result */}
                   {selectedAdjudication && (
                     <div className="drawer-section">
@@ -664,6 +822,56 @@ export function App() {
                         <p style={{ fontSize: '12px', marginTop: '8px', lineHeight: '1.5' }}>
                           {selectedAdjudication.reason}
                         </p>
+
+                        {/* Supporting Quotation Verification */}
+                        {selectedAdjudication.supporting_quotation && (
+                          <div style={{ marginTop: '10px', padding: '8px 10px', background: 'rgba(0,0,0,0.3)', borderRadius: '6px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>Supporting Quotation:</span>
+                              {selectedAdjudication.quotation_verified ? (
+                                <span className="badge badge-emerald" style={{ fontSize: '10px', padding: '2px 6px' }}>✓ Verified in Source</span>
+                              ) : (
+                                <span className="badge badge-muted" style={{ fontSize: '10px', padding: '2px 6px' }}>Unverified Quote</span>
+                              )}
+                            </div>
+                            <blockquote style={{ fontSize: '11px', fontStyle: 'italic', color: '#cbd5e1', borderLeft: '2px solid #10b981', paddingLeft: '8px', margin: '4px 0' }}>
+                              "{selectedAdjudication.supporting_quotation}"
+                            </blockquote>
+                          </div>
+                        )}
+
+                        {/* Source Fingerprints */}
+                        {selectedAdjudication.source_fingerprints && selectedAdjudication.source_fingerprints.length > 0 && (
+                          <div style={{ marginTop: '10px' }}>
+                            <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>
+                              Authoritative Fingerprints ({selectedAdjudication.source_fingerprints.length}):
+                            </span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+                              {selectedAdjudication.source_fingerprints.map((fp, i) => (
+                                <div key={i} style={{ fontSize: '10px', background: '#050811', padding: '4px 8px', borderRadius: '4px', border: '1px solid #1e293b' }}>
+                                  <div style={{ color: '#38bdf8', fontWeight: '600' }}>{fp.domain} ({fp.apex_domain})</div>
+                                  <div style={{ color: '#64748b', fontFamily: 'monospace' }}>SHA256: {fp.sha256_fingerprint?.slice(0, 16)}...</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Qualifying Recipients */}
+                        {selectedAdjudication.qualifying_recipients && selectedAdjudication.qualifying_recipients.length > 0 && (
+                          <div style={{ marginTop: '10px' }}>
+                            <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>
+                              Qualifying Recipients ({selectedAdjudication.qualifying_recipients.length}):
+                            </span>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                              {selectedAdjudication.qualifying_recipients.map((r, i) => (
+                                <span key={i} className="badge badge-emerald" style={{ fontSize: '10px' }}>
+                                  {r.slice(0, 6)}...{r.slice(-4)}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -699,28 +907,76 @@ export function App() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-                    <button
-                      className="btn-primary"
-                      style={{ flex: 1, padding: '10px 14px', fontSize: '13px' }}
-                      onClick={() => {
-                        setTargetClaimId(selectedClaim.id);
-                        setActiveTab('evidence');
-                      }}
-                    >
-                      <PlusCircle size={15} /> Attach Evidence
-                    </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {selectedClaim.status === 'EVIDENCE_OPEN' && (
+                        <>
+                          <button
+                            className="btn-primary"
+                            style={{ flex: 1, padding: '10px 14px', fontSize: '13px' }}
+                            onClick={() => {
+                              setTargetClaimId(selectedClaim.id);
+                              setActiveTab('evidence');
+                            }}
+                          >
+                            <PlusCircle size={15} /> Attach Evidence
+                          </button>
+                          <button
+                            className="btn-secondary"
+                            style={{ padding: '10px 14px', fontSize: '13px' }}
+                            onClick={() => {
+                              setAdjClaimId(selectedClaim.id);
+                              setActiveTab('adjudicate');
+                            }}
+                          >
+                            <Scale size={15} /> Adjudicate
+                          </button>
+                        </>
+                      )}
+                    </div>
 
-                    {selectedClaim.status === 'EVIDENCE_OPEN' && (
+                    {/* Settle Bounty Button */}
+                    {(selectedClaim.status === 'RESOLVED' || selectedClaim.status === 'PARTIALLY_SETTLED') &&
+                      (selectedClaim.verdict === 'CONFIRMED' || selectedClaim.verdict === 'REFUTED') &&
+                      BigInt(selectedClaim.bounty_amount || '0') > 0n && (
+                        <button
+                          className="btn-primary"
+                          style={{ width: '100%', padding: '10px 14px', fontSize: '13px', background: '#059669', borderColor: '#10b981' }}
+                          onClick={() => {
+                            const recipients = selectedClaim.qualifying_recipients || selectedAdjudication?.qualifying_recipients || [];
+                            setSelectedRecipient(recipients[0] || '');
+                            setShowSettleModal(true);
+                          }}
+                        >
+                          <Award size={15} /> Settle Bounty to Qualifying Recipient
+                        </button>
+                      )}
+
+                    {/* Refund Bounty Button */}
+                    {selectedClaim.status === 'RESOLVED' &&
+                      ['INSUFFICIENT_EVIDENCE', 'SOURCE_UNAVAILABLE', 'CONFLICTED'].includes(selectedClaim.verdict || '') &&
+                      BigInt(selectedClaim.bounty_amount || '0') > 0n && (
+                        <button
+                          className="btn-secondary"
+                          style={{ width: '100%', padding: '10px 14px', fontSize: '13px', color: '#f59e0b', borderColor: '#f59e0b' }}
+                          onClick={() => handleRefundBounty(selectedClaim.id)}
+                          disabled={isRefunding}
+                        >
+                          {isRefunding ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                          <span>Refund Escrowed Bounty to Contributors</span>
+                        </button>
+                      )}
+
+                    {/* Cancel Claim Button */}
+                    {selectedClaim.status === 'DRAFT' && (
                       <button
                         className="btn-secondary"
-                        style={{ padding: '10px 14px', fontSize: '13px' }}
-                        onClick={() => {
-                          setAdjClaimId(selectedClaim.id);
-                          setActiveTab('adjudicate');
-                        }}
+                        style={{ width: '100%', padding: '10px 14px', fontSize: '13px', color: '#ef4444', borderColor: '#ef4444' }}
+                        onClick={() => handleCancelClaim(selectedClaim.id)}
+                        disabled={isCancelling}
                       >
-                        <Scale size={15} /> Adjudicate
+                        {isCancelling ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
+                        <span>Cancel Claim & Auto-Refund Deposited GEN</span>
                       </button>
                     )}
                   </div>
@@ -1317,6 +1573,174 @@ export function App() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Fund Bounty Modal */}
+        {showFundModal && (
+          <div className="wallet-modal-overlay" onClick={() => !isFunding && setShowFundModal(false)}>
+            <div className="wallet-modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+              <div className="wallet-modal-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div className="wallet-icon-badge" style={{ background: 'rgba(251, 191, 36, 0.15)', borderColor: '#fbbf24' }}>
+                    <Coins size={18} color="#fbbf24" />
+                  </div>
+                  <h3 className="wallet-modal-title">Fund State Assertion Bounty</h3>
+                </div>
+                <button
+                  className="wallet-modal-close"
+                  onClick={() => !isFunding && setShowFundModal(false)}
+                  disabled={isFunding}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleFundBountySubmit} className="wallet-modal-body">
+                <p className="wallet-modal-subtitle">
+                  Deposit native GEN into the protocol truth pool for claim <strong>{selectedClaimId}</strong>.
+                  Individual contributor accounting tracks your exact deposit for safe refund recovery.
+                </p>
+
+                <div style={{ marginTop: '16px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>
+                    Deposit Amount (GEN):
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    className="form-input"
+                    value={fundAmountGen}
+                    onChange={(e) => setFundAmountGen(e.target.value)}
+                    placeholder="e.g. 0.5"
+                    required
+                    disabled={isFunding}
+                  />
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                    Estimated wei: {fundAmountGen ? `${(parseFloat(fundAmountGen) * 1e18).toLocaleString('fullwide', { useGrouping: false })} wei` : '0 wei'}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ flex: 1, padding: '10px', fontSize: '13px' }}
+                    onClick={() => setShowFundModal(false)}
+                    disabled={isFunding}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-primary"
+                    style={{ flex: 2, padding: '10px', fontSize: '13px', background: '#d97706', borderColor: '#f59e0b' }}
+                    disabled={isFunding || isWrongNetwork}
+                  >
+                    {isFunding ? (
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                        <Loader2 size={15} className="animate-spin" />
+                        Depositing GEN...
+                      </span>
+                    ) : (
+                      <span>Deposit Bounty into Escrow</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Settle Bounty Modal */}
+        {showSettleModal && (
+          <div className="wallet-modal-overlay" onClick={() => !isSettling && setShowSettleModal(false)}>
+            <div className="wallet-modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '460px' }}>
+              <div className="wallet-modal-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div className="wallet-icon-badge" style={{ background: 'rgba(16, 185, 129, 0.15)', borderColor: '#10b981' }}>
+                    <Award size={18} color="#10b981" />
+                  </div>
+                  <h3 className="wallet-modal-title">Settle Bounty to Qualifying Participant</h3>
+                </div>
+                <button
+                  className="wallet-modal-close"
+                  onClick={() => !isSettling && setShowSettleModal(false)}
+                  disabled={isSettling}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSettleBountySubmit} className="wallet-modal-body">
+                <p className="wallet-modal-subtitle">
+                  Executes genuine native GEN transfer from the protocol contract to an authenticated qualifying recipient.
+                  Deterministic eligibility requires that the recipient submitted evidence verified during consensus.
+                </p>
+
+                <div style={{ marginTop: '16px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>
+                    Select Qualifying Recipient:
+                  </label>
+                  {selectedClaim?.qualifying_recipients && selectedClaim.qualifying_recipients.length > 0 ? (
+                    <select
+                      className="form-select"
+                      value={selectedRecipient}
+                      onChange={(e) => setSelectedRecipient(e.target.value)}
+                      required
+                      disabled={isSettling}
+                    >
+                      {selectedClaim.qualifying_recipients.map((recip, idx) => (
+                        <option key={idx} value={recip}>
+                          {recip} (Qualifying Submitter #{idx + 1})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={selectedRecipient}
+                      onChange={(e) => setSelectedRecipient(e.target.value)}
+                      placeholder="0x..."
+                      required
+                      disabled={isSettling}
+                    />
+                  )}
+                  <div style={{ fontSize: '11px', color: '#10b981', marginTop: '6px' }}>
+                    Escrow Balance: {(Number(selectedClaim?.bounty_amount || 0) / 1e18).toFixed(4)} GEN
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ flex: 1, padding: '10px', fontSize: '13px' }}
+                    onClick={() => setShowSettleModal(false)}
+                    disabled={isSettling}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-primary"
+                    style={{ flex: 2, padding: '10px', fontSize: '13px', background: '#059669', borderColor: '#10b981' }}
+                    disabled={isSettling || isWrongNetwork || !selectedRecipient}
+                  >
+                    {isSettling ? (
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                        <Loader2 size={15} className="animate-spin" />
+                        Executing GEN Transfer...
+                      </span>
+                    ) : (
+                      <span>Transfer Bounty Share</span>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

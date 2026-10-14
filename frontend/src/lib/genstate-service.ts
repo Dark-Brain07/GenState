@@ -213,12 +213,13 @@ class LiveGenStateService {
 
     return {
       protocol_name: String(raw.protocol_name || "GenState"),
-      version: String(raw.version || "1.1.0"),
+      version: String(raw.version || "1.2.0"),
       admin: String(raw.admin || ""),
       total_claims: Number(raw.total_claims || 0),
       total_evidence: Number(raw.total_evidence || 0),
       total_escrowed: String(raw.total_escrowed || "0"),
       total_settled: String(raw.total_settled || "0"),
+      total_refunded: String(raw.total_refunded || "0"),
       supported_policies: (raw.supported_policies || []) as string[],
       supported_claim_types: (raw.supported_claim_types || []) as string[],
     };
@@ -247,12 +248,17 @@ class LiveGenStateService {
       reference_date: String(item.reference_date || ""),
       source_policy: String(item.source_policy || ""),
       window_seconds: Number(item.window_seconds || 0),
+      opened_at: Number(item.opened_at || 0),
+      evidence_deadline: Number(item.evidence_deadline || 0),
       status: String(item.status || "DRAFT") as any,
       verdict: item.verdict ? String(item.verdict) : undefined,
       verdict_reason: item.verdict_reason ? String(item.verdict_reason) : undefined,
       adjudication_time: item.adjudication_time ? String(item.adjudication_time) : undefined,
       evidence_count: Number(item.evidence_count || 0),
       bounty_amount: String(item.bounty_amount || "0"),
+      funders: (item.funders || []) as string[],
+      qualifying_recipients: (item.qualifying_recipients || []) as string[],
+      bounty_settled_recipients: (item.bounty_settled_recipients || []) as string[],
     }));
   }
 
@@ -277,12 +283,17 @@ class LiveGenStateService {
       reference_date: String(item.reference_date || ""),
       source_policy: String(item.source_policy || ""),
       window_seconds: Number(item.window_seconds || 0),
+      opened_at: Number(item.opened_at || 0),
+      evidence_deadline: Number(item.evidence_deadline || 0),
       status: String(item.status || "DRAFT") as any,
       verdict: item.verdict ? String(item.verdict) : undefined,
       verdict_reason: item.verdict_reason ? String(item.verdict_reason) : undefined,
       adjudication_time: item.adjudication_time ? String(item.adjudication_time) : undefined,
       evidence_count: Number(item.evidence_count || 0),
       bounty_amount: String(item.bounty_amount || "0"),
+      funders: (item.funders || []) as string[],
+      qualifying_recipients: (item.qualifying_recipients || []) as string[],
+      bounty_settled_recipients: (item.bounty_settled_recipients || []) as string[],
     };
   }
 
@@ -330,6 +341,10 @@ class LiveGenStateService {
       confidence_score: Number(res.confidence_score || 0),
       adjudicated_at: String(res.adjudicated_at || ""),
       evidence_count: Number(res.evidence_count || 0),
+      source_fingerprints: (res.source_fingerprints || []) as any[],
+      quotation_verified: Boolean(res.quotation_verified),
+      supporting_quotation: String(res.supporting_quotation || ""),
+      qualifying_recipients: (res.qualifying_recipients || []) as string[],
     };
   }
 

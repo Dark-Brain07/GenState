@@ -14,7 +14,7 @@ import hashlib
 # multi-validator LLM consensus to establish verifiable on-chain truth.
 # ==============================================================================
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 # Supported claim domain categories
 CLAIM_TYPES = [
@@ -40,6 +40,7 @@ STATE_EVIDENCE_OPEN = "EVIDENCE_OPEN"
 STATE_ADJUDICATING = "ADJUDICATING"
 STATE_RESOLVED = "RESOLVED"
 STATE_SETTLED = "SETTLED"
+STATE_PARTIALLY_SETTLED = "PARTIALLY_SETTLED"
 STATE_CANCELLED = "CANCELLED"
 STATE_REFUNDED = "REFUNDED"
 
@@ -83,6 +84,33 @@ def _extract_domain(url: str) -> str:
         stripped = stripped.split("://", 1)[1]
     host = stripped.split("/", 1)[0].split(":", 1)[0].split("?", 1)[0].lower()
     return host
+
+
+def _extract_apex_domain(url: str) -> str:
+    """
+    Extract registered apex domain (effective 2nd-level domain) to prevent
+    treating subdomains of the same publisher as independent sources.
+    Example: 'docs.example.com' -> 'example.com', 'sec.gov' -> 'sec.gov'.
+    """
+    host = _extract_domain(url)
+    if not host:
+        return ""
+    parts = host.split(".")
+    if len(parts) <= 2:
+        return host
+
+    # Common multi-part ccTLDs
+    cctlds = (
+        "co.uk", "gov.uk", "ac.uk", "org.uk",
+        "gov.au", "com.au", "edu.au",
+        "gov.in", "co.in", "nic.in",
+        "com.br", "gov.br",
+    )
+    last_two = f"{parts[-2]}.{parts[-1]}"
+    if last_two in cctlds and len(parts) >= 3:
+        return f"{parts[-3]}.{last_two}"
+
+    return f"{parts[-2]}.{parts[-1]}"
 
 
 def _is_official_registry_domain(domain: str) -> bool:
@@ -152,6 +180,10 @@ class GenState(gl.Contract):
     total_bounties_escrowed: u256
     total_bounties_paid: u256
     total_bounties_refunded: u256
+    # v1.2.0: Multi-funder contribution tracking & duplicate-settlement protection
+    claim_funders: TreeMap[str, str]
+    funder_deposits: TreeMap[str, u256]
+    recipient_settled: TreeMap[str, u256]
 
     def __init__(self):
         self.admin = gl.message.sender_address
@@ -204,6 +236,14 @@ class GenState(gl.Contract):
             return []
         return json.loads(raw)
 
+    def _get_funders_list(self, claim_id: str) -> list:
+        if claim_id not in self.claim_funders:
+            return []
+        raw = self.claim_funders[claim_id]
+        if not raw:
+            return []
+        return json.loads(raw)
+
     # --------------------------------------------------------------------------
     # Public State Writing Methods
     # --------------------------------------------------------------------------
@@ -245,7 +285,6 @@ class GenState(gl.Contract):
         claim_data = {
             "id": claim_id,
             "creator": _addr_str(gl.message.sender_address),
-            "funder": "",
             "claim_type": c_type,
             "subject": subj,
             "predicate": pred,
@@ -261,13 +300,15 @@ class GenState(gl.Contract):
             "adjudication_time": "",
             "evidence_count": 0,
             "bounty_amount": "0",
-            "eligible_recipients": [],
-            "bounty_settled_to": "",
+            "funders": [],
+            "qualifying_recipients": [],
+            "bounty_settled_recipients": [],
         }
 
         self._save_claim_dict(claim_id, claim_data)
         self.claim_ids.append(claim_id)
         self.claim_evidence_ids[claim_id] = json.dumps([])
+        self.claim_funders[claim_id] = json.dumps([])
         self.bounties[claim_id] = u256(0)
 
         return claim_id
@@ -310,17 +351,39 @@ class GenState(gl.Contract):
 
     @gl.public.write.payable
     def fund_bounty(self, claim_id: str) -> str:
-        """Fund an escrowed bounty reward for evidence providers and adjudication settlement."""
+        """
+        Fund an escrowed bounty reward for evidence providers.
+        Supports multiple individual contributors, accurately tracking each contributor's
+        deposited GEN for transparent proportional or individual refund accounting.
+        """
         claim = self._get_claim_dict(claim_id)
         if claim["status"] in [STATE_RESOLVED, STATE_SETTLED, STATE_CANCELLED, STATE_REFUNDED]:
             raise gl.vm.UserError(
-                f"Cannot fund bounty on claim with status '{claim['status']}'"
+                f"Cannot fund bounty on claim with terminal status '{claim['status']}'"
             )
 
         added_val = gl.message.value
         if added_val == u256(0):
             raise gl.vm.UserError("Must send native GEN value to fund bounty")
 
+        sender_str = _addr_str(gl.message.sender_address)
+
+        # 1. Update individual contributor balance
+        deposit_key = f"{claim_id}:{sender_str}"
+        current_dep = (
+            self.funder_deposits[deposit_key]
+            if deposit_key in self.funder_deposits
+            else u256(0)
+        )
+        self.funder_deposits[deposit_key] = current_dep + added_val
+
+        # 2. Maintain list of contributors
+        funders = self._get_funders_list(claim_id)
+        if sender_str not in funders:
+            funders.append(sender_str)
+            self.claim_funders[claim_id] = json.dumps(funders)
+
+        # 3. Update total claim bounty & protocol escrow
         current_bounty = (
             self.bounties[claim_id] if claim_id in self.bounties else u256(0)
         )
@@ -328,11 +391,8 @@ class GenState(gl.Contract):
         self.bounties[claim_id] = new_bounty
         self.total_bounties_escrowed = self.total_bounties_escrowed + added_val
 
-        # Record primary funder if not set, or preserve funder
-        if not claim.get("funder"):
-            claim["funder"] = _addr_str(gl.message.sender_address)
-
         claim["bounty_amount"] = str(new_bounty)
+        claim["funders"] = funders
         self._save_claim_dict(claim_id, claim)
 
         return str(new_bounty)
@@ -391,13 +451,6 @@ class GenState(gl.Contract):
         # Update claim's evidence collection
         ev_list.append(evidence_id)
         self.claim_evidence_ids[claim_id] = json.dumps(ev_list)
-
-        # Record submitter in eligible recipient pool
-        recipients = claim.get("eligible_recipients", [])
-        if sender_str not in recipients:
-            recipients.append(sender_str)
-        claim["eligible_recipients"] = recipients
-
         claim["evidence_count"] = len(ev_list)
         self._save_claim_dict(claim_id, claim)
 
@@ -407,8 +460,15 @@ class GenState(gl.Contract):
     def adjudicate(self, claim_id: str) -> str:
         """
         Executes multi-validator intelligent consensus over submitted evidence.
-        Enforces evidence window expiration, deterministic source admissibility policies,
-        content fingerprinting, temporal reference date evaluation, and storage purity.
+        Enforces:
+        - Timed evidence window expiration
+        - Deterministic source admissibility policies & apex-domain publisher independence
+        - Mirror detection via SHA-256 content hashes
+        - Persistent source content fingerprinting in stored record
+        - Verbatim supporting quotation verification against retrieved source text
+        - Deterministic qualifying recipient selection (submitting spam does not make one eligible)
+        - Strict temporal reference date evaluation
+        - Storage pre-extraction purity (zero self in non-deterministic closure)
         """
         claim = self._get_claim_dict(claim_id)
 
@@ -436,22 +496,24 @@ class GenState(gl.Contract):
                 evidence_items.append(json.loads(self.evidence_records[eid]))
 
         # ----------------------------------------------------------------------
-        # DETERMINISTIC SOURCE ADMISSIBILITY POLICY VERIFICATION
+        # DETERMINISTIC SOURCE ADMISSIBILITY & PUBLISHER INDEPENDENCE CHECKS
         # ----------------------------------------------------------------------
         domains = [_extract_domain(item.get("source_url", "")) for item in evidence_items]
+        apex_domains = [_extract_apex_domain(item.get("source_url", "")) for item in evidence_items]
         distinct_domains = set(d for d in domains if d)
+        distinct_apex_domains = set(a for a in apex_domains if a)
         policy = claim["source_policy"]
 
         policy_failure_reason = ""
         if policy == "MULTI_SOURCE_INDEPENDENT":
-            if len(distinct_domains) < 2:
+            if len(distinct_apex_domains) < 2:
                 policy_failure_reason = (
-                    f"MULTI_SOURCE_INDEPENDENT policy violated: requires at least 2 distinct publisher domains, found {len(distinct_domains)}"
+                    f"MULTI_SOURCE_INDEPENDENT policy violated: requires at least 2 distinct independent publisher apex domains, found {len(distinct_apex_domains)}"
                 )
         elif policy == "PRIMARY_PLUS_CORROBORATION":
-            if len(distinct_domains) < 2:
+            if len(distinct_apex_domains) < 2:
                 policy_failure_reason = (
-                    f"PRIMARY_PLUS_CORROBORATION policy violated: requires distinct primary and corroborating domains, found {len(distinct_domains)}"
+                    f"PRIMARY_PLUS_CORROBORATION policy violated: requires distinct primary and corroborating publisher domains, found {len(distinct_apex_domains)}"
                 )
         elif policy == "OFFICIAL_REGISTRY":
             if not any(_is_official_registry_domain(d) for d in distinct_domains):
@@ -469,6 +531,7 @@ class GenState(gl.Contract):
             claim["verdict"] = VERDICT_INSUFFICIENT
             claim["verdict_reason"] = policy_failure_reason
             claim["adjudication_time"] = str(self._now())
+            claim["qualifying_recipients"] = []
             self._save_claim_dict(claim_id, claim)
 
             adj_data = {
@@ -478,6 +541,10 @@ class GenState(gl.Contract):
                 "confidence_score": 0,
                 "adjudicated_at": str(self._now()),
                 "evidence_count": len(evidence_items),
+                "source_fingerprints": [],
+                "quotation_verified": False,
+                "supporting_quotation": "",
+                "qualifying_recipients": [],
             }
             self.claim_adjudications[claim_id] = json.dumps(adj_data)
             return VERDICT_INSUFFICIENT
@@ -499,11 +566,16 @@ class GenState(gl.Contract):
         def leader_fn() -> str:
             # 1. Fetch web content defensively & compute SHA256 fingerprints
             evidence_summaries = []
+            fingerprint_records = []
             unreachable_count = 0
+            seen_content_hashes = set()
+            retrieved_texts = []
 
-            for item in frozen_evidence:
+            for idx, item in enumerate(frozen_evidence):
                 url = item.get("source_url", "")
                 note = item.get("explanation", "")
+                sub = item.get("submitter", "")
+                eid = item.get("id", "")
                 page_text = ""
                 fingerprint = "NONE"
                 fetch_status = "FETCH_SUCCESS"
@@ -515,6 +587,13 @@ class GenState(gl.Contract):
                     raw_body = res.body.decode("utf-8", errors="ignore")
                     fingerprint = hashlib.sha256(raw_body.encode("utf-8")).hexdigest()
                     page_text = " ".join(raw_body.split())[:12000]
+                    retrieved_texts.append(page_text)
+
+                    # Mirror detection
+                    if fingerprint in seen_content_hashes:
+                        fetch_status = "MIRROR_DUPLICATE"
+                    else:
+                        seen_content_hashes.add(fingerprint)
                 except Exception:
                     unreachable_count += 1
                     fetch_status = "SOURCE_UNREACHABLE"
@@ -522,12 +601,23 @@ class GenState(gl.Contract):
 
                 evidence_summaries.append(
                     {
-                        "evidence_id": item.get("id", ""),
+                        "index": idx,
+                        "evidence_id": eid,
                         "url": url,
                         "fetch_status": fetch_status,
                         "source_sha256_fingerprint": fingerprint,
-                        "submitter_context_note": note,
                         "content_sample": page_text[:2000],
+                    }
+                )
+
+                fingerprint_records.append(
+                    {
+                        "evidence_id": eid,
+                        "url": url,
+                        "domain": _extract_domain(url),
+                        "apex_domain": _extract_apex_domain(url),
+                        "sha256_fingerprint": fingerprint,
+                        "fetch_status": fetch_status,
                     }
                 )
 
@@ -538,6 +628,9 @@ class GenState(gl.Contract):
                     "reason": "All submitted external evidence links were unreachable or timed out; self-reported context is insufficient for conclusive judgment.",
                     "confidence_score": 0,
                     "supporting_quotation": "",
+                    "quotation_verified": False,
+                    "qualifying_indices": [],
+                    "source_fingerprints": fingerprint_records,
                 }
                 return json.dumps(fallback_res, sort_keys=True)
 
@@ -558,10 +651,11 @@ TEMPORAL EVALUATION RULE:
 The claim is asserted as of reference date '{frozen_reference_date}'. You MUST verify whether the asserted value was true AT OR AS OF THIS SPECIFIC REFERENCE DATE. If an evidence source describes a subsequent state change that occurred AFTER the reference date, you must account for this historical distinction and judge strictly against '{frozen_reference_date}'.
 
 EVALUATION CRITERIA:
-- The fetched webpage content samples and fingerprints are authoritative evidence. Submitter context notes are descriptive only and MUST NOT be accepted as factual proof if the source content does not verify them.
+- The fetched webpage content samples and fingerprints are authoritative evidence. Submitter notes are NOT factual proof.
 - If web sources contradict each other, rule CONFLICTED.
 - If web sources are inconclusive or insufficient to prove the assertion under policy '{frozen_policy}', rule INSUFFICIENT_EVIDENCE.
 - Extract an exact verbatim supporting quotation from the content sample that supports your ruling.
+- Identify which evidence index numbers (0, 1, ...) provided genuine, qualifying, corroborating facts that substantiated your verdict. Do not include irrelevant, failed, or mirror duplicate sources.
 
 SUBMITTED EVIDENCE SOURCES:
 {json.dumps(evidence_summaries, indent=2)}
@@ -579,7 +673,8 @@ You MUST respond strictly with a valid JSON object matching this schema:
   "verdict": "CONFIRMED" | "REFUTED" | "CONFLICTED" | "INSUFFICIENT_EVIDENCE" | "SOURCE_UNAVAILABLE",
   "reason": "Clear objective rationale citing examined source facts (max 100 words)",
   "confidence_score": 0 to 100,
-  "supporting_quotation": "Verbatim quote from source content sample (or empty string)"
+  "supporting_quotation": "Verbatim quote from source content sample (or empty string)",
+  "qualifying_indices": [0, 1]
 }}"""
 
             raw_res = gl.nondet.exec_prompt(prompt, response_format="json")
@@ -592,6 +687,7 @@ You MUST respond strictly with a valid JSON object matching this schema:
                         "reason": "Malformed LLM payload",
                         "confidence_score": 0,
                         "supporting_quotation": "",
+                        "qualifying_indices": [],
                     }
             else:
                 parsed = raw_res
@@ -600,33 +696,71 @@ You MUST respond strictly with a valid JSON object matching this schema:
             if v not in ALLOWED_VERDICTS:
                 v = "INSUFFICIENT_EVIDENCE"
 
+            # 3. Deterministic Quotation Verification
+            sq = str(parsed.get("supporting_quotation", "")).strip()[:300]
+            quote_verified = False
+            if sq and len(sq) >= 5:
+                sq_lower = sq.lower()
+                for txt in retrieved_texts:
+                    if sq_lower in txt.lower():
+                        quote_verified = True
+                        break
+
+            # 4. Deterministic Qualifying Indices Validation
+            raw_indices = parsed.get("qualifying_indices", [])
+            valid_qualifying = []
+            if isinstance(raw_indices, list) and v in [VERDICT_CONFIRMED, VERDICT_REFUTED]:
+                for idx in raw_indices:
+                    if isinstance(idx, int) and 0 <= idx < len(frozen_evidence):
+                        # Must have been successfully fetched
+                        if evidence_summaries[idx]["fetch_status"] == "FETCH_SUCCESS":
+                            if idx not in valid_qualifying:
+                                valid_qualifying.append(idx)
+
             clean_result = {
                 "verdict": v,
                 "reason": str(parsed.get("reason", "Adjudication finalized")).strip()[:400],
                 "confidence_score": int(parsed.get("confidence_score", 75)),
-                "supporting_quotation": str(parsed.get("supporting_quotation", "")).strip()[:300],
+                "supporting_quotation": sq,
+                "quotation_verified": quote_verified,
+                "qualifying_indices": valid_qualifying,
+                "source_fingerprints": fingerprint_records,
             }
             return json.dumps(clean_result, sort_keys=True)
 
         # 3. Equivalence principle consensus comparative evaluation
         consensus_raw = gl.eq_principle.prompt_comparative(
             leader_fn,
-            principle="Equal if validators agree on the primary verdict (CONFIRMED, REFUTED, CONFLICTED, INSUFFICIENT_EVIDENCE, or SOURCE_UNAVAILABLE) and inspected materially consistent source evidence. Minor variations in reason or confidence_score are acceptable.",
+            principle="Equal if validators agree on the primary verdict (CONFIRMED, REFUTED, CONFLICTED, INSUFFICIENT_EVIDENCE, or SOURCE_UNAVAILABLE), qualifying evidence indices, and inspected materially consistent source fingerprints. Minor variations in reason or confidence_score are acceptable.",
         )
 
         ruling = json.loads(consensus_raw)
         verdict = ruling.get("verdict", VERDICT_INSUFFICIENT)
         reason = ruling.get("reason", "")
         confidence = ruling.get("confidence_score", 0)
+        supporting_quote = ruling.get("supporting_quotation", "")
+        quote_verified = bool(ruling.get("quotation_verified", False))
+        source_fps = ruling.get("source_fingerprints", [])
+        qualifying_indices = ruling.get("qualifying_indices", [])
+
+        # Map qualifying indices to submitter addresses
+        qualifying_submitters = []
+        for idx in qualifying_indices:
+            if 0 <= idx < len(evidence_items):
+                sub = _addr_str(evidence_items[idx].get("submitter", ""))
+                if sub and sub not in qualifying_submitters:
+                    qualifying_submitters.append(sub)
 
         # 4. Deterministic state transition
         claim["status"] = STATE_RESOLVED
         claim["verdict"] = verdict
         claim["verdict_reason"] = reason
         claim["adjudication_time"] = str(self._now())
+        claim["qualifying_recipients"] = qualifying_submitters
 
         self._save_claim_dict(claim_id, claim)
 
+        # Persist full authoritative adjudication record WITH fingerprints & quotation verification
         adj_data = {
             "claim_id": claim_id,
             "verdict": verdict,
@@ -634,6 +768,10 @@ You MUST respond strictly with a valid JSON object matching this schema:
             "confidence_score": confidence,
             "adjudicated_at": str(self._now()),
             "evidence_count": len(evidence_items),
+            "source_fingerprints": source_fps,  # PERSISTED ON-CHAIN
+            "quotation_verified": quote_verified,  # PERSISTED ON-CHAIN
+            "supporting_quotation": supporting_quote,
+            "qualifying_recipients": qualifying_submitters,
         }
         self.claim_adjudications[claim_id] = json.dumps(adj_data)
 
@@ -644,15 +782,19 @@ You MUST respond strictly with a valid JSON object matching this schema:
         """
         Settles the escrowed bounty on a conclusively resolved claim.
         Executes genuine native GEN transfer to the eligible evidence recipient.
-        Enforces authorization, eligibility, and duplicate-payment protection.
+        Enforces:
+        - Conclusive verdict (CONFIRMED or REFUTED)
+        - Caller authorization
+        - Deterministic reward eligibility (recipient must have provided qualifying evidence)
+        - Proportional allocation if multiple qualifying recipients exist
+        - Duplicate-payment protection per recipient
         """
         claim = self._get_claim_dict(claim_id)
-        if claim["status"] != STATE_RESOLVED:
+        if claim["status"] not in [STATE_RESOLVED, STATE_PARTIALLY_SETTLED]:
             raise gl.vm.UserError(
-                f"Cannot settle bounty on claim in status '{claim['status']}', must be '{STATE_RESOLVED}'"
+                f"Cannot settle bounty on claim in status '{claim['status']}', must be '{STATE_RESOLVED}' or '{STATE_PARTIALLY_SETTLED}'"
             )
 
-        # Bounty only payable on conclusive verdicts
         verdict = claim.get("verdict", "")
         if verdict not in [VERDICT_CONFIRMED, VERDICT_REFUTED]:
             raise gl.vm.UserError(
@@ -661,61 +803,103 @@ You MUST respond strictly with a valid JSON object matching this schema:
 
         caller_str = _addr_str(gl.message.sender_address)
         creator_str = _addr_str(claim.get("creator", ""))
-        funder_str = _addr_str(claim.get("funder", ""))
+        funders = self._get_funders_list(claim_id)
         recip_str = _addr_str(recipient)
 
-        # Authorization: caller must be creator, funder, or the intended recipient
-        if caller_str not in [creator_str, funder_str, recip_str]:
+        # Authorization: caller must be creator, one of the funders, or the recipient
+        if caller_str != creator_str and caller_str not in funders and caller_str != recip_str:
             raise gl.vm.UserError("Caller is not authorized to settle bounty on this claim")
 
-        # Deterministic recipient eligibility: recipient must have submitted admissible evidence
-        eligible = [_addr_str(r) for r in claim.get("eligible_recipients", [])]
-        if recip_str not in eligible:
+        # Deterministic recipient eligibility: recipient must have submitted qualifying evidence
+        qualifying = claim.get("qualifying_recipients", [])
+        if recip_str not in qualifying:
             raise gl.vm.UserError(
-                "Proposed recipient is not an eligible evidence submitter for this claim"
+                "Proposed recipient did not provide qualifying evidence that supported the verdict"
             )
 
-        bounty_val = (
+        # Duplicate payment protection
+        settle_key = f"{claim_id}:{recip_str}"
+        already_paid = (
+            self.recipient_settled[settle_key]
+            if settle_key in self.recipient_settled
+            else u256(0)
+        )
+        if already_paid > u256(0):
+            raise gl.vm.UserError("Bounty already settled to this recipient")
+
+        total_bounty_remaining = (
             self.bounties[claim_id] if claim_id in self.bounties else u256(0)
         )
-        if bounty_val == u256(0):
+        if total_bounty_remaining == u256(0):
             raise gl.vm.UserError("No escrowed bounty remaining to settle")
 
+        # Calculate recipient's deterministic allocation share
+        num_qualifying = len(qualifying)
+        settled_list = claim.get("bounty_settled_recipients", [])
+        unsettled_count = num_qualifying - len(settled_list)
+        if unsettled_count <= 1:
+            payout_share = total_bounty_remaining
+        else:
+            payout_share = total_bounty_remaining // u256(unsettled_count)
+        if payout_share == u256(0):
+            payout_share = total_bounty_remaining
+
         # Checks-Effects: Update state FIRST to prevent duplicate payments
-        self.bounties[claim_id] = u256(0)
-        self.total_bounties_escrowed = self.total_bounties_escrowed - bounty_val
-        self.total_bounties_paid = self.total_bounties_paid + bounty_val
-        claim["status"] = STATE_SETTLED
-        claim["bounty_settled_to"] = _addr_str(recipient)
+        self.recipient_settled[settle_key] = payout_share
+        self.bounties[claim_id] = total_bounty_remaining - payout_share
+        self.total_bounties_escrowed = self.total_bounties_escrowed - payout_share
+        self.total_bounties_paid = self.total_bounties_paid + payout_share
+
+        if recip_str not in settled_list:
+            settled_list.append(recip_str)
+        claim["bounty_settled_recipients"] = settled_list
+
+        if self.bounties[claim_id] == u256(0) or len(settled_list) >= num_qualifying:
+            claim["status"] = STATE_SETTLED
+        else:
+            claim["status"] = STATE_PARTIALLY_SETTLED
+
+        claim["bounty_amount"] = str(self.bounties[claim_id])
         self._save_claim_dict(claim_id, claim)
 
         # Interactions: Execute native GEN movement
-        self._send_gen(recipient, bounty_val)
+        self._send_gen(recipient, payout_share)
 
-        return str(bounty_val)
+        return str(payout_share)
 
     @gl.public.write
     def cancel_claim(self, claim_id: str) -> str:
-        """Cancel a claim if still in DRAFT status, refunding any deposited GEN to the funder."""
+        """
+        Cancel a claim if still in DRAFT status, refunding 100% of deposited GEN
+        to each individual contributor according to their exact recorded deposits.
+        """
         claim = self._get_claim_dict(claim_id)
         if _addr_str(gl.message.sender_address) != _addr_str(claim["creator"]):
             raise gl.vm.UserError("Only creator can cancel")
         if claim["status"] != STATE_DRAFT:
             raise gl.vm.UserError("Cannot cancel an active or frozen claim")
 
-        bounty_val = (
-            self.bounties[claim_id] if claim_id in self.bounties else u256(0)
-        )
+        # Refund each contributor their exact deposit
+        funders = self._get_funders_list(claim_id)
+        total_refunded_here = u256(0)
+        for f in funders:
+            dep_key = f"{claim_id}:{f}"
+            dep_val = (
+                self.funder_deposits[dep_key]
+                if dep_key in self.funder_deposits
+                else u256(0)
+            )
+            if dep_val > u256(0):
+                self.funder_deposits[dep_key] = u256(0)
+                total_refunded_here = total_refunded_here + dep_val
+                self._send_gen(Address(f), dep_val)
 
-        # Refund escrowed GEN if bounty was funded in DRAFT
-        if bounty_val > u256(0):
-            funder_target = claim.get("funder") or claim["creator"]
-            funder_addr = Address(funder_target)
+        if total_refunded_here > u256(0):
             self.bounties[claim_id] = u256(0)
-            self.total_bounties_escrowed = self.total_bounties_escrowed - bounty_val
-            self.total_bounties_refunded = self.total_bounties_refunded + bounty_val
-            self._send_gen(funder_addr, bounty_val)
+            self.total_bounties_escrowed = self.total_bounties_escrowed - total_refunded_here
+            self.total_bounties_refunded = self.total_bounties_refunded + total_refunded_here
 
+        claim["bounty_amount"] = "0"
         claim["status"] = STATE_CANCELLED
         self._save_claim_dict(claim_id, claim)
         return claim_id
@@ -723,22 +907,23 @@ You MUST respond strictly with a valid JSON object matching this schema:
     @gl.public.write
     def refund_bounty(self, claim_id: str) -> str:
         """
-        Safely refunds escrowed bounty to the funder if the claim reached a terminal
+        Safely refunds escrowed bounty to contributors if the claim reached a terminal
         inconclusive state (CANCELLED, INSUFFICIENT_EVIDENCE, SOURCE_UNAVAILABLE, CONFLICTED)
         or if the evidence window expired without adjudication.
+        Returns each contributor their exact individual deposited share.
         """
         claim = self._get_claim_dict(claim_id)
         caller_str = _addr_str(gl.message.sender_address)
-        funder_str = _addr_str(claim.get("funder", ""))
         creator_str = _addr_str(claim.get("creator", ""))
+        funders = self._get_funders_list(claim_id)
 
-        if caller_str not in [funder_str, creator_str]:
-            raise gl.vm.UserError("Only the bounty funder or claim creator can request a refund")
+        if caller_str != creator_str and caller_str not in funders:
+            raise gl.vm.UserError("Only a bounty contributor or claim creator can request a refund")
 
-        bounty_val = (
+        total_bounty = (
             self.bounties[claim_id] if claim_id in self.bounties else u256(0)
         )
-        if bounty_val == u256(0):
+        if total_bounty == u256(0):
             raise gl.vm.UserError("No escrowed bounty available to refund")
 
         is_cancelled = claim["status"] == STATE_CANCELLED
@@ -759,19 +944,32 @@ You MUST respond strictly with a valid JSON object matching this schema:
                 f"Cannot refund bounty on claim with status '{claim['status']}' and verdict '{claim.get('verdict')}'"
             )
 
-        # Checks-Effects: Update state FIRST
+        # Refund each contributor their exact deposit
+        total_refunded_here = u256(0)
+        for f in funders:
+            dep_key = f"{claim_id}:{f}"
+            dep_val = (
+                self.funder_deposits[dep_key]
+                if dep_key in self.funder_deposits
+                else u256(0)
+            )
+            if dep_val > u256(0):
+                self.funder_deposits[dep_key] = u256(0)
+                total_refunded_here = total_refunded_here + dep_val
+                self._send_gen(Address(f), dep_val)
+
+        if total_refunded_here == u256(0):
+            raise gl.vm.UserError("No remaining contributor balances to refund")
+
+        # Checks-Effects: Update state
         self.bounties[claim_id] = u256(0)
-        self.total_bounties_escrowed = self.total_bounties_escrowed - bounty_val
-        self.total_bounties_refunded = self.total_bounties_refunded + bounty_val
+        self.total_bounties_escrowed = self.total_bounties_escrowed - total_refunded_here
+        self.total_bounties_refunded = self.total_bounties_refunded + total_refunded_here
+        claim["bounty_amount"] = "0"
         claim["status"] = STATE_REFUNDED
         self._save_claim_dict(claim_id, claim)
 
-        # Interactions: Transfer native GEN refund
-        funder_target = claim.get("funder") or claim["creator"]
-        funder_addr = Address(funder_target)
-        self._send_gen(funder_addr, bounty_val)
-
-        return str(bounty_val)
+        return str(total_refunded_here)
 
     # --------------------------------------------------------------------------
     # Public Read / View Methods
@@ -796,7 +994,25 @@ You MUST respond strictly with a valid JSON object matching this schema:
     @gl.public.view
     def get_claim(self, claim_id: str) -> dict:
         """Returns detailed claim record by ID."""
-        return self._get_claim_dict(claim_id)
+        claim = self._get_claim_dict(claim_id)
+        if claim_id in self.bounties:
+            claim["bounty_amount"] = str(self.bounties[claim_id])
+        return claim
+
+    @gl.public.view
+    def get_claim_funders(self, claim_id: str) -> list:
+        """Returns list of contributors and their deposited amounts for a claim."""
+        funders = self._get_funders_list(claim_id)
+        results = []
+        for f in funders:
+            dep_key = f"{claim_id}:{f}"
+            amount = (
+                str(self.funder_deposits[dep_key])
+                if dep_key in self.funder_deposits
+                else "0"
+            )
+            results.append({"funder": f, "amount": amount})
+        return results
 
     @gl.public.view
     def list_claims(self, offset: u256, limit: u256) -> list:
@@ -833,5 +1049,9 @@ You MUST respond strictly with a valid JSON object matching this schema:
                 "claim_id": claim_id,
                 "verdict": "NOT_ADJUDICATED",
                 "reason": "Adjudication has not been performed yet.",
+                "source_fingerprints": [],
+                "quotation_verified": False,
+                "supporting_quotation": "",
+                "qualifying_recipients": [],
             }
         return json.loads(self.claim_adjudications[claim_id])

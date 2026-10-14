@@ -1,0 +1,154 @@
+{
+  "network": "studionet",
+  "chain_id": 61999,
+  "contract_name": "GenState",
+  "contract_version": "1.2.0",
+  "contract_address": "0x619C7880ADF334Ee402A6140ee3f4fC1942059bD",
+  "deployer_address": "0x8EBFC0d85233F56f777F8e16793bC758608019bE",
+  "deployment_tx_hash": "0x0e9be6998c1e98b7e35e3aecfc5a18be8688a741bf56983aaa6218b2eff825f2",
+  "explorer_url": "https://explorer-studio.genlayer.com/address/0x619C7880ADF334Ee402A6140ee3f4fC1942059bD",
+  "verification_timestamp": "2026-10-14T15:05:00Z",
+  "test_participants": {
+    "admin": "0x460cF609C3155D4b265eC856a68Fd5A999c03f18",
+    "alice_funder_1": "0x49Dc93854B7AFA91A5A5C29Abed71ACc398ea2B4",
+    "bob_funder_2": "0xaBFA80824cf29ab621eaa7A4B1A5A57d24D55685",
+    "charlie_qualifying_evidence_submitter": "0x134b3E0bBfF5e2ed0A924b6bc6578368F091f6f5",
+    "dave_non_qualifying_submitter": "0xef662b4b059DF68C39335550b6C1930F9b9b7568"
+  },
+  "verified_transactions": {
+    "claim_1_lifecycle": {
+      "claim_id": "CLAIM-2",
+      "declare_tx": {
+        "tx_hash": "0x135c17fbdf6dab6890963e6ed3c2e2a2c1939099413efb141387ec6af9208c94",
+        "explorer_url": "https://explorer-studio.genlayer.com/tx/0x135c17fbdf6dab6890963e6ed3c2e2a2c1939099413efb141387ec6af9208c94",
+        "status": "FINALIZED (7)"
+      },
+      "multi_funder_deposit_alice": {
+        "funder": "0x49Dc93854B7AFA91A5A5C29Abed71ACc398ea2B4",
+        "amount_wei": "200000000000000000",
+        "amount_gen": "0.20",
+        "tx_hash": "0x71552992aa06438f78836191b086830e432223ad4c8374205d9d66a8a63e3b77",
+        "explorer_url": "https://explorer-studio.genlayer.com/tx/0x71552992aa06438f78836191b086830e432223ad4c8374205d9d66a8a63e3b77",
+        "status": "FINALIZED (7)"
+      },
+      "multi_funder_deposit_bob": {
+        "funder": "0xaBFA80824cf29ab621eaa7A4B1A5A57d24D55685",
+        "amount_wei": "100000000000000000",
+        "amount_gen": "0.10",
+        "tx_hash": "0xc77f9dca1125dbc1323d387b0dd4397602968cdda4cf3bc1c2d3b3a26c0f6415",
+        "explorer_url": "https://explorer-studio.genlayer.com/tx/0xc77f9dca1125dbc1323d387b0dd4397602968cdda4cf3bc1c2d3b3a26c0f6415",
+        "status": "FINALIZED (7)"
+      },
+      "total_escrow_recorded_wei": "300000000000000000",
+      "total_escrow_recorded_gen": "0.30",
+      "freeze_claim_tx": {
+        "window_seconds": 60,
+        "policy": "OPEN_PUBLIC",
+        "tx_hash": "0x78041f0e6b49b78558918e91171e6ec31c922e5e600d184a4348c9e6cca0ecd6",
+        "explorer_url": "https://explorer-studio.genlayer.com/tx/0x78041f0e6b49b78558918e91171e6ec31c922e5e600d184a4348c9e6cca0ecd6",
+        "status": "FINALIZED (7)"
+      },
+      "evidence_charlie_qualifying": {
+        "submitter": "0x134b3E0bBfF5e2ed0A924b6bc6578368F091f6f5",
+        "source_url": "https://example.com",
+        "is_qualifying": true,
+        "tx_hash": "0x94c5ead50afb0733007bb70e2ad2a59cef2cbf493f1fbfd94922e710abdd68d9",
+        "explorer_url": "https://explorer-studio.genlayer.com/tx/0x94c5ead50afb0733007bb70e2ad2a59cef2cbf493f1fbfd94922e710abdd68d9",
+        "status": "FINALIZED (7)"
+      },
+      "evidence_dave_non_qualifying": {
+        "submitter": "0xef662b4b059DF68C39335550b6C1930F9b9b7568",
+        "source_url": "https://example.org",
+        "is_qualifying": false,
+        "tx_hash": "0x51569249289a7b0972bb3db795e372c68135c658153980922e289596ec0163a7",
+        "explorer_url": "https://explorer-studio.genlayer.com/tx/0x51569249289a7b0972bb3db795e372c68135c658153980922e289596ec0163a7",
+        "status": "FINALIZED (7)"
+      },
+      "consensus_adjudication_tx": {
+        "tx_hash": "0x5a2965916083e77d768ba24e0343602146a119c7d5e310d1d01a8130a75d9192",
+        "explorer_url": "https://explorer-studio.genlayer.com/tx/0x5a2965916083e77d768ba24e0343602146a119c7d5e310d1d01a8130a75d9192",
+        "verdict": "CONFIRMED",
+        "confidence_score": 100,
+        "quotation_verified": true,
+        "supporting_quotation_extracted": true,
+        "persisted_source_fingerprints": [
+          {
+            "evidence_id": "EVID-1",
+            "url": "https://example.com",
+            "domain": "example.com",
+            "apex_domain": "example.com",
+            "sha256_fingerprint": "25ddf2c883e0d1958ea971d279a7e4f0fd446724ee3db7db19dadabd4a62e484",
+            "fetch_status": "FETCH_SUCCESS"
+          }
+        ],
+        "qualifying_recipients": [
+          "0x134b3e0bbff5e2ed0a924b6bc6578368f091f6f5"
+        ],
+        "non_qualifying_excluded": [
+          "0xef662b4b059DF68C39335550b6C1930F9b9b7568"
+        ],
+        "status": "FINALIZED (7)"
+      },
+      "bounty_settlement_payout_tx": {
+        "tx_hash": "0x14ea39cbb3e7c5682f317342d5a6c82be7ef8627b8cec05ada75541d8643f406",
+        "explorer_url": "https://explorer-studio.genlayer.com/tx/0x14ea39cbb3e7c5682f317342d5a6c82be7ef8627b8cec05ada75541d8643f406",
+        "recipient": "0x134b3e0bbff5e2ed0a924b6bc6578368f091f6f5",
+        "pre_balance_wei": "100000000000000000",
+        "post_balance_wei": "400000000000000000",
+        "net_payout_wei": "300000000000000000",
+        "net_payout_gen": "0.30",
+        "status": "FINALIZED (7)"
+      }
+    },
+    "claim_2_multi_funder_cancellation_and_refund": {
+      "claim_id": "CLAIM-3",
+      "declare_tx": {
+        "tx_hash": "0xf8ed623435f028a936f8053e141b93f65efff84e145a98a7a0752c85f43e75b7",
+        "explorer_url": "https://explorer-studio.genlayer.com/tx/0xf8ed623435f028a936f8053e141b93f65efff84e145a98a7a0752c85f43e75b7",
+        "status": "FINALIZED (7)"
+      },
+      "funder_1_deposit_alice": {
+        "funder": "0x49Dc93854B7AFA91A5A5C29Abed71ACc398ea2B4",
+        "amount_wei": "150000000000000000",
+        "amount_gen": "0.15",
+        "tx_hash": "0x89809b215d69fb0fa2b971eabeee60611e4946b07fe5e0ea788920c09ba84d0f",
+        "explorer_url": "https://explorer-studio.genlayer.com/tx/0x89809b215d69fb0fa2b971eabeee60611e4946b07fe5e0ea788920c09ba84d0f",
+        "status": "FINALIZED (7)"
+      },
+      "funder_2_deposit_bob": {
+        "funder": "0xaBFA80824cf29ab621eaa7A4B1A5A57d24D55685",
+        "amount_wei": "100000000000000000",
+        "amount_gen": "0.10",
+        "tx_hash": "0xb568a8d4aed4fb393eab7e3202923886589f9912d6b9607d2b61aa0c8bf00e0a",
+        "explorer_url": "https://explorer-studio.genlayer.com/tx/0xb568a8d4aed4fb393eab7e3202923886589f9912d6b9607d2b61aa0c8bf00e0a",
+        "status": "FINALIZED (7)"
+      },
+      "cancellation_and_refund_tx": {
+        "tx_hash": "0x78ed4fe04dc6ee04a6b27d4d8e049b6c7b5dc42455e1ddbe0d23340046b529a6",
+        "explorer_url": "https://explorer-studio.genlayer.com/tx/0x78ed4fe04dc6ee04a6b27d4d8e049b6c7b5dc42455e1ddbe0d23340046b529a6",
+        "status": "FINALIZED (7)",
+        "alice_refund_verified": {
+          "address": "0x49Dc93854B7AFA91A5A5C29Abed71ACc398ea2B4",
+          "deposited_wei": "150000000000000000",
+          "pre_refund_balance_wei": "650000000000000000",
+          "post_refund_balance_wei": "800000000000000000",
+          "net_refund_wei": "150000000000000000",
+          "net_refund_gen": "0.15"
+        },
+        "bob_refund_verified": {
+          "address": "0xaBFA80824cf29ab621eaa7A4B1A5A57d24D55685",
+          "deposited_wei": "100000000000000000",
+          "pre_refund_balance_wei": "800000000000000000",
+          "post_refund_balance_wei": "900000000000000000",
+          "net_refund_wei": "100000000000000000",
+          "net_refund_gen": "0.10"
+        }
+      }
+    }
+  },
+  "protocol_cumulative_metrics": {
+    "total_claims": 3,
+    "total_bounties_settled_wei": "300000000000000000",
+    "total_bounties_refunded_wei": "250000000000000000"
+  }
+}

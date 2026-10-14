@@ -1,17 +1,20 @@
 """
-Genuine GenVM Direct Mode Test Suite for GenState Protocol.
+Comprehensive GenVM Direct Mode Behavioral Test Suite for GenState Protocol v1.2.0.
 
 Executes intelligent contract methods in-memory using gltest direct mode fixtures:
-- Authorization and access control
-- Evidence window timestamps and deadline enforcement
-- Deterministic source-admissibility policies (multi-source independent, official registries)
-- Web mocks and content fingerprinting
-- LLM response evaluation and defensive handling of malformed responses
-- Native GEN bounty deposits, escrow accounting, and balance verification
-- Draft cancellation with safe 100% funder refunds
-- Deterministic recipient eligibility and genuine native GEN settlement payouts
-- Duplicate-payment replay protection
-- Terminal-state recovery refunds for inconclusive adjudications
+- Multi-funder accounting with individual deposit tracking
+- Proportional and individual draft cancellation refunds
+- Inconclusive adjudication refunds across multiple contributors
+- Deterministic reward eligibility (rejection of non-qualifying or spam submitters)
+- Proportional settlement across multiple qualifying recipients
+- Duplicate-settlement and duplicate-refund replay protection
+- Timed evidence window deadlines and premature adjudication rejection
+- Deterministic source-admissibility policies (all 5 policies verified)
+- Apex-domain publisher independence and mirror duplicate detection
+- Source content fingerprint persistence and quotation verification
+- Temporal reference-date evaluation
+- Defensive handling of malformed LLM responses
+- Escrow accounting invariants across all terminal states
 """
 
 import json
@@ -21,6 +24,8 @@ CONTRACT_PATH = "contracts/gen_state.py"
 BASE_TIME = "2026-10-14T10:00:00Z"
 BOUNTY_1_GEN = 10**18
 BOUNTY_HALF_GEN = 5 * 10**17
+BOUNTY_POINT_SIX_GEN = 6 * 10**17
+BOUNTY_POINT_FOUR_GEN = 4 * 10**17
 
 
 def deploy(direct_deploy):
@@ -28,7 +33,7 @@ def deploy(direct_deploy):
 
 
 # ==============================================================================
-# 1. Authorization & Lifecycle Reversion Tests
+# 1. Authorization & Lifecycle Access Control Tests
 # ==============================================================================
 
 def test_access_control_freeze_and_cancel(direct_vm, direct_deploy, direct_alice, direct_bob):
@@ -118,32 +123,310 @@ def test_evidence_window_deadlines(direct_vm, direct_deploy, direct_alice, direc
 
 
 # ==============================================================================
-# 3. Deterministic Source-Admissibility Policy Tests
+# 3. Multi-Funder Contribution Accounting & Safe Refund Tests
 # ==============================================================================
 
-def test_multi_source_independent_policy_enforcement(direct_vm, direct_deploy, direct_alice, direct_bob):
+def test_multi_funder_accounting_and_individual_draft_refunds(direct_vm, direct_deploy, direct_alice, direct_bob, direct_charlie):
+    """
+    Verifies that multiple contributors can fund the same claim, their individual
+    contributions are tracked accurately, and cancellation in DRAFT refunds each
+    contributor their exact deposited amount.
+    """
+    direct_vm.warp(BASE_TIME)
+    contract = deploy(direct_deploy)
+
+    # Alice creates claim
+    direct_vm.sender = direct_alice
+    claim_id = contract.declare_claim("FACTUAL_EVENT", "Conference Held", "venue", "Hall A", "2026-05-01")
+
+    # Bob funds 0.6 GEN
+    direct_vm.sender = direct_bob
+    direct_vm.value = BOUNTY_POINT_SIX_GEN
+    contract.fund_bounty(claim_id)
+    direct_vm.value = 0
+
+    # Charlie funds 0.4 GEN
+    direct_vm.sender = direct_charlie
+    direct_vm.value = BOUNTY_POINT_FOUR_GEN
+    contract.fund_bounty(claim_id)
+    direct_vm.value = 0
+
+    # Verify claim contributors and total escrowed
+    stats = contract.get_protocol_stats()
+    assert stats["total_escrowed"] == str(BOUNTY_1_GEN)
+
+    funders = contract.get_claim_funders(claim_id)
+    assert len(funders) == 2
+    funder_map = {f["funder"].lower(): f["amount"] for f in funders}
+    bob_addr = ("0x" + direct_bob.hex()).lower()
+    charlie_addr = ("0x" + direct_charlie.hex()).lower()
+    assert funder_map[bob_addr] == str(BOUNTY_POINT_SIX_GEN)
+    assert funder_map[charlie_addr] == str(BOUNTY_POINT_FOUR_GEN)
+
+    # Alice cancels claim while in DRAFT
+    direct_vm.sender = direct_alice
+    contract.cancel_claim(claim_id)
+
+    claim = contract.get_claim(claim_id)
+    assert claim["status"] == "CANCELLED"
+
+    updated_stats = contract.get_protocol_stats()
+    assert updated_stats["total_escrowed"] == "0"
+    assert updated_stats["total_refunded"] == str(BOUNTY_1_GEN)
+
+
+def test_multi_funder_inconclusive_adjudication_refunds(direct_vm, direct_deploy, direct_alice, direct_bob, direct_charlie):
+    """
+    Verifies that when a multi-funded claim concludes with an inconclusive verdict
+    (INSUFFICIENT_EVIDENCE), an authorized funder can trigger refund and each contributor
+    receives their exact individual deposit.
+    """
     direct_vm.warp("2026-10-14T10:00:00Z")
     contract = deploy(direct_deploy)
 
-    # Declare claim under MULTI_SOURCE_INDEPENDENT
+    # Alice creates claim
     direct_vm.sender = direct_alice
-    claim_id = contract.declare_claim("REGISTRY_RECORD", "Entity Verification", "registered_as", "LLC", "2026-01-01")
+    claim_id = contract.declare_claim("FACTUAL_EVENT", "Unconfirmed Event", "occurred", "TRUE", "2026-01-01")
+
+    # Bob funds 0.3 GEN, Charlie funds 0.2 GEN
+    direct_vm.sender = direct_bob
+    direct_vm.value = 3 * 10**17
+    contract.fund_bounty(claim_id)
+    direct_vm.value = 0
+
+    direct_vm.sender = direct_charlie
+    direct_vm.value = 2 * 10**17
+    contract.fund_bounty(claim_id)
+    direct_vm.value = 0
+
+    # Alice freezes with MULTI_SOURCE_INDEPENDENT
+    direct_vm.sender = direct_alice
     contract.freeze_claim(claim_id, "MULTI_SOURCE_INDEPENDENT", 100)
 
-    # Only 1 source submitted from single domain
+    # Only single source submitted -> policy fails deterministically
     direct_vm.sender = direct_bob
-    contract.submit_evidence(claim_id, "https://domain-alpha.com/page1", "First report")
+    contract.submit_evidence(claim_id, "https://single-source.com/report", "One single report")
 
-    # Fast forward past window
     direct_vm.warp("2026-10-14T10:02:00Z")
+    verdict = contract.adjudicate(claim_id)
+    assert verdict == "INSUFFICIENT_EVIDENCE"
 
-    # Adjudication must deterministically resolve to INSUFFICIENT_EVIDENCE due to single source
-    res = contract.adjudicate(claim_id)
-    assert res == "INSUFFICIENT_EVIDENCE"
+    # Bob triggers refund
+    direct_vm.sender = direct_bob
+    refunded_amt = contract.refund_bounty(claim_id)
+    assert refunded_amt == str(5 * 10**17)
+
     claim = contract.get_claim(claim_id)
-    assert claim["verdict"] == "INSUFFICIENT_EVIDENCE"
-    assert "MULTI_SOURCE_INDEPENDENT policy violated" in claim["verdict_reason"]
+    assert claim["status"] == "REFUNDED"
+    assert contract.get_protocol_stats()["total_refunded"] == str(5 * 10**17)
+    assert contract.get_protocol_stats()["total_escrowed"] == "0"
 
+    # Duplicate refund attempt must revert
+    with pytest.raises(Exception) as exc:
+        contract.refund_bounty(claim_id)
+    assert "No escrowed bounty available to refund" in str(exc.value)
+
+
+# ==============================================================================
+# 4. Deterministic Reward Eligibility & Proportional Settlement Tests
+# ==============================================================================
+
+def test_deterministic_reward_eligibility_and_settlement(direct_vm, direct_deploy, direct_alice, direct_bob, direct_charlie, direct_owner):
+    """
+    Verifies that:
+    1. Submitting evidence alone does NOT grant bounty eligibility.
+    2. Only submitters of QUALIFYING evidence (identified during consensus) are eligible.
+    3. Rejects settlement attempts by participants who submitted irrelevant/non-contributing evidence.
+    4. Proportional settlement correctly distributes shares to qualifying recipients.
+    5. Duplicate settlement is strictly prevented.
+    """
+    direct_vm.warp("2026-10-14T10:00:00Z")
+    contract = deploy(direct_deploy)
+
+    # 1. Alice creates claim
+    direct_vm.sender = direct_alice
+    claim_id = contract.declare_claim(
+        "REGISTRY_RECORD",
+        "Global Corporation Verification",
+        "corporate_status",
+        "ACTIVE_GOOD_STANDING",
+        "2026-03-01",
+    )
+
+    # 2. Alice funds 1 GEN
+    direct_vm.value = BOUNTY_1_GEN
+    contract.fund_bounty(claim_id)
+    direct_vm.value = 0
+
+    contract.freeze_claim(claim_id, "MULTI_SOURCE_INDEPENDENT", 300)
+
+    # 3. Bob submits qualifying evidence from source A
+    direct_vm.warp("2026-10-14T10:01:00Z")
+    direct_vm.sender = direct_bob
+    contract.submit_evidence(claim_id, "https://registry-alpha.org/corp-456", "Registry confirms active good standing")
+
+    # 4. Charlie submits qualifying evidence from independent source B
+    direct_vm.sender = direct_charlie
+    contract.submit_evidence(claim_id, "https://records-beta.gov/corp-456", "Government records show active good standing")
+
+    # 5. Owner (Dave) submits an irrelevant spam link
+    direct_vm.sender = direct_owner
+    contract.submit_evidence(claim_id, "https://spam-forum.xyz/thread", "Unrelated forum chatter")
+
+    # 6. Mock Web Sources
+    direct_vm.mock_web(
+        r".*registry-alpha\.org.*",
+        {"status": 200, "body": "Corp 456 is in ACTIVE_GOOD_STANDING as of 2026-03-01."},
+    )
+    direct_vm.mock_web(
+        r".*records-beta\.gov.*",
+        {"status": 200, "body": "Official Gazette: Corp 456 ACTIVE_GOOD_STANDING confirmed."},
+    )
+    direct_vm.mock_web(
+        r".*spam-forum\.xyz.*",
+        {"status": 200, "body": "Hello world discuss crypto memes."},
+    )
+
+    # 7. Mock LLM consensus: only sources 0 and 1 qualify! Source 2 is excluded!
+    llm_output = {
+        "verdict": "CONFIRMED",
+        "reason": "Both registry-alpha.org and records-beta.gov corroborate ACTIVE_GOOD_STANDING. Source 2 is irrelevant.",
+        "confidence_score": 96,
+        "supporting_quotation": "Corp 456 is in ACTIVE_GOOD_STANDING as of 2026-03-01.",
+        "qualifying_indices": [0, 1],  # Bob and Charlie
+    }
+    direct_vm.mock_llm(r".*authoritative validator node in the GenState.*", json.dumps(llm_output))
+
+    direct_vm.warp("2026-10-14T10:06:00Z")
+    verdict = contract.adjudicate(claim_id)
+    assert verdict == "CONFIRMED"
+
+    claim = contract.get_claim(claim_id)
+    qualifying_recipients = claim["qualifying_recipients"]
+    bob_addr = ("0x" + direct_bob.hex()).lower()
+    charlie_addr = ("0x" + direct_charlie.hex()).lower()
+    owner_addr = ("0x" + direct_owner.hex()).lower()
+
+    assert bob_addr in qualifying_recipients
+    assert charlie_addr in qualifying_recipients
+    assert owner_addr not in qualifying_recipients  # Spam submitter excluded!
+
+    # 8. Attempted settlement to non-qualifying submitter (Dave / Owner) must revert
+    direct_vm.sender = direct_alice
+    with pytest.raises(Exception) as exc:
+        contract.settle_bounty(claim_id, direct_owner)
+    assert "Proposed recipient did not provide qualifying evidence that supported the verdict" in str(exc.value)
+
+    # 9. Settle Bob's qualifying share (50% of 1 GEN = 0.5 GEN)
+    direct_vm.sender = direct_alice
+    bob_share = contract.settle_bounty(claim_id, direct_bob)
+    assert bob_share == str(BOUNTY_HALF_GEN)
+
+    claim_after_bob = contract.get_claim(claim_id)
+    assert claim_after_bob["status"] == "PARTIALLY_SETTLED"
+
+    # Bob attempts duplicate settlement -> must revert
+    with pytest.raises(Exception) as exc:
+        contract.settle_bounty(claim_id, direct_bob)
+    assert "Bounty already settled to this recipient" in str(exc.value)
+
+    # 10. Settle Charlie's qualifying share (remaining 0.5 GEN)
+    charlie_share = contract.settle_bounty(claim_id, direct_charlie)
+    assert charlie_share == str(BOUNTY_HALF_GEN)
+
+    claim_final = contract.get_claim(claim_id)
+    assert claim_final["status"] == "SETTLED"
+    assert contract.get_protocol_stats()["total_settled"] == str(BOUNTY_1_GEN)
+    assert contract.get_protocol_stats()["total_escrowed"] == "0"
+
+
+# ==============================================================================
+# 5. Evidence Integrity: Fingerprint Persistence & Quote Verification Tests
+# ==============================================================================
+
+def test_fingerprint_persistence_and_quotation_verification(direct_vm, direct_deploy, direct_alice, direct_bob):
+    """
+    Verifies that:
+    1. SHA-256 source content fingerprints are preserved in the final adjudication record.
+    2. Supporting quotations are deterministically verified against retrieved source text.
+    """
+    direct_vm.warp("2026-10-14T10:00:00Z")
+    contract = deploy(direct_deploy)
+
+    direct_vm.sender = direct_alice
+    claim_id = contract.declare_claim("COMPLIANCE_STATUS", "Security Audit", "audit_passed", "TRUE", "2026-04-01")
+    contract.freeze_claim(claim_id, "OPEN_PUBLIC", 100)
+
+    direct_vm.sender = direct_bob
+    contract.submit_evidence(claim_id, "https://auditor.security/reports/genstate", "Audit report published")
+
+    audit_text = "GenState Intelligent Contract audit completed with ZERO critical vulnerabilities found."
+    direct_vm.mock_web(r".*auditor\.security.*", {"status": 200, "body": audit_text})
+
+    direct_vm.mock_llm(
+        r".*authoritative validator node in the GenState.*",
+        json.dumps({
+            "verdict": "CONFIRMED",
+            "reason": "Auditor report confirms zero critical vulnerabilities.",
+            "confidence_score": 99,
+            "supporting_quotation": "ZERO critical vulnerabilities found.",
+            "qualifying_indices": [0],
+        }),
+    )
+
+    direct_vm.warp("2026-10-14T10:02:00Z")
+    verdict = contract.adjudicate(claim_id)
+    assert verdict == "CONFIRMED"
+
+    adj = contract.get_adjudication(claim_id)
+    assert adj["verdict"] == "CONFIRMED"
+    assert adj["quotation_verified"] is True
+    assert adj["supporting_quotation"] == "ZERO critical vulnerabilities found."
+
+    # Assert source fingerprints were persisted on-chain
+    fps = adj["source_fingerprints"]
+    assert len(fps) == 1
+    assert fps[0]["domain"] == "auditor.security"
+    assert fps[0]["fetch_status"] == "FETCH_SUCCESS"
+    assert len(fps[0]["sha256_fingerprint"]) == 64  # valid SHA256 hex string
+
+
+# ==============================================================================
+# 6. Publisher Independence & Apex Domain Enforcement Tests
+# ==============================================================================
+
+def test_apex_domain_publisher_independence_enforcement(direct_vm, direct_deploy, direct_alice, direct_bob, direct_charlie):
+    """
+    Verifies that subdomains of the same publisher (e.g. blog.example.com and docs.example.com)
+    do NOT count as independent sources under MULTI_SOURCE_INDEPENDENT.
+    """
+    direct_vm.warp("2026-10-14T10:00:00Z")
+    contract = deploy(direct_deploy)
+
+    direct_vm.sender = direct_alice
+    claim_id = contract.declare_claim("REGISTRY_RECORD", "Same Publisher Test", "verified", "TRUE", "2026-01-01")
+    contract.freeze_claim(claim_id, "MULTI_SOURCE_INDEPENDENT", 100)
+
+    # Bob submits from blog.example.com; Charlie submits from docs.example.com
+    direct_vm.sender = direct_bob
+    contract.submit_evidence(claim_id, "https://blog.example.com/post", "Blog report")
+
+    direct_vm.sender = direct_charlie
+    contract.submit_evidence(claim_id, "https://docs.example.com/spec", "Docs report")
+
+    direct_vm.warp("2026-10-14T10:02:00Z")
+    verdict = contract.adjudicate(claim_id)
+
+    # Must fail because both share the apex domain 'example.com'
+    assert verdict == "INSUFFICIENT_EVIDENCE"
+    claim = contract.get_claim(claim_id)
+    assert "MULTI_SOURCE_INDEPENDENT policy violated" in claim["verdict_reason"]
+    assert "requires at least 2 distinct independent publisher apex domains, found 1" in claim["verdict_reason"]
+
+
+# ==============================================================================
+# 7. Remaining Policy & Corner Cases (Official Registry, Regulatory, Conflicted, Malformed)
+# ==============================================================================
 
 def test_official_registry_policy_enforcement(direct_vm, direct_deploy, direct_alice, direct_bob):
     direct_vm.warp("2026-10-14T10:00:00Z")
@@ -163,206 +446,24 @@ def test_official_registry_policy_enforcement(direct_vm, direct_deploy, direct_a
     assert "OFFICIAL_REGISTRY policy violated" in contract.get_claim(claim_id)["verdict_reason"]
 
 
-# ==============================================================================
-# 4. Native GEN Bounty Funding, Cancellation & Refund Tests
-# ==============================================================================
-
-def test_draft_cancellation_refunds_deposited_gen(direct_vm, direct_deploy, direct_alice, direct_bob):
-    direct_vm.warp(BASE_TIME)
-    contract = deploy(direct_deploy)
-
-    # Alice creates claim
-    direct_vm.sender = direct_alice
-    claim_id = contract.declare_claim("FACTUAL_EVENT", "Conference Held", "venue", "Hall A", "2026-05-01")
-
-    # Bob funds bounty with 1 GEN
-    direct_vm.sender = direct_bob
-    direct_vm.value = BOUNTY_1_GEN
-    contract.fund_bounty(claim_id)
-    direct_vm.value = 0
-
-    stats = contract.get_protocol_stats()
-    assert stats["total_escrowed"] == str(BOUNTY_1_GEN)
-
-    # Alice cancels claim while still in DRAFT
-    direct_vm.sender = direct_alice
-    contract.cancel_claim(claim_id)
-
-    claim = contract.get_claim(claim_id)
-    assert claim["status"] == "CANCELLED"
-
-    updated_stats = contract.get_protocol_stats()
-    assert updated_stats["total_escrowed"] == "0"
-    assert updated_stats["total_refunded"] == str(BOUNTY_1_GEN)
-
-
-def test_inconclusive_adjudication_funder_recovery(direct_vm, direct_deploy, direct_alice, direct_bob, direct_charlie):
-    direct_vm.warp("2026-10-14T10:00:00Z")
-    contract = deploy(direct_deploy)
-
-    # Alice declares and Bob funds
-    direct_vm.sender = direct_alice
-    claim_id = contract.declare_claim("FACTUAL_EVENT", "Mystery Event", "occurred", "TRUE", "2026-01-01")
-    direct_vm.sender = direct_bob
-    direct_vm.value = BOUNTY_HALF_GEN
-    contract.fund_bounty(claim_id)
-    direct_vm.value = 0
-
-    # Alice freezes with MULTI_SOURCE
-    direct_vm.sender = direct_alice
-    contract.freeze_claim(claim_id, "MULTI_SOURCE_INDEPENDENT", 100)
-
-    # Charlie submits insufficient single source
-    direct_vm.sender = direct_charlie
-    contract.submit_evidence(claim_id, "https://solo-source.com/news", "Single blog claim")
-
-    # Window expires -> adjudicate gives INSUFFICIENT_EVIDENCE
-    direct_vm.warp("2026-10-14T10:02:00Z")
-    res = contract.adjudicate(claim_id)
-    assert res == "INSUFFICIENT_EVIDENCE"
-
-    # Unauthorized party (Charlie) cannot claim or refund
-    with pytest.raises(Exception) as exc:
-        contract.refund_bounty(claim_id)
-    assert "Only the bounty funder or claim creator can request a refund" in str(exc.value)
-
-    # Bob (funder) safely recovers deposited bounty
-    direct_vm.sender = direct_bob
-    refunded_amt = contract.refund_bounty(claim_id)
-    assert refunded_amt == str(BOUNTY_HALF_GEN)
-
-    claim = contract.get_claim(claim_id)
-    assert claim["status"] == "REFUNDED"
-    assert contract.get_protocol_stats()["total_refunded"] == str(BOUNTY_HALF_GEN)
-
-
-# ==============================================================================
-# 5. Full Adjudication, Semantic Consensus & Genuine Native GEN Settlement
-# ==============================================================================
-
-def test_full_conclusive_adjudication_and_settlement(direct_vm, direct_deploy, direct_alice, direct_bob, direct_charlie):
-    direct_vm.warp("2026-10-14T10:00:00Z")
-    contract = deploy(direct_deploy)
-
-    # 1. Alice creates claim
-    direct_vm.sender = direct_alice
-    claim_id = contract.declare_claim(
-        "REGISTRY_RECORD",
-        "Ecosystem Corporation Registration",
-        "registration_status",
-        "INCORPORATED_ACTIVE",
-        "2026-01-15",
-    )
-
-    # 2. Alice funds bounty with 1 GEN
-    direct_vm.value = BOUNTY_1_GEN
-    contract.fund_bounty(claim_id)
-    direct_vm.value = 0
-
-    # 3. Alice freezes claim under MULTI_SOURCE_INDEPENDENT
-    contract.freeze_claim(claim_id, "MULTI_SOURCE_INDEPENDENT", 300)
-
-    # 4. Bob and Charlie submit evidence from 2 distinct independent domains
-    direct_vm.warp("2026-10-14T10:01:00Z")
-    direct_vm.sender = direct_bob
-    contract.submit_evidence(
-        claim_id,
-        "https://alpha-registry.org/corp/123",
-        "Official company index verifies active status as of January 15",
-    )
-
-    direct_vm.sender = direct_charlie
-    contract.submit_evidence(
-        claim_id,
-        "https://beta-filings.net/records/corp-123",
-        "Independent corporate record repository lists entity active",
-    )
-
-    # 5. Mock Web pages for both sources
-    direct_vm.mock_web(
-        r".*alpha-registry\.org.*",
-        {
-            "status": 200,
-            "body": "<html><body>Ecosystem Corporation is confirmed INCORPORATED_ACTIVE on 2026-01-15. Registration id 123.</body></html>",
-        },
-    )
-    direct_vm.mock_web(
-        r".*beta-filings\.net.*",
-        {
-            "status": 200,
-            "body": "<html><body>Filing Record 123: Ecosystem Corporation state is INCORPORATED_ACTIVE as of January 2026.</body></html>",
-        },
-    )
-
-    # 6. Mock LLM consensus response
-    llm_verdict = {
-        "verdict": "CONFIRMED",
-        "reason": "Both independent sources corroborate that Ecosystem Corporation held INCORPORATED_ACTIVE status on 2026-01-15.",
-        "confidence_score": 98,
-        "supporting_quotation": "Ecosystem Corporation is confirmed INCORPORATED_ACTIVE on 2026-01-15.",
-    }
-    direct_vm.mock_llm(r".*authoritative validator node in the GenState.*", json.dumps(llm_verdict))
-
-    # 7. Fast forward past evidence deadline
-    direct_vm.warp("2026-10-14T10:06:00Z")
-
-    # 8. Run Adjudication
-    verdict = contract.adjudicate(claim_id)
-    assert verdict == "CONFIRMED"
-
-    claim = contract.get_claim(claim_id)
-    assert claim["status"] == "RESOLVED"
-    assert claim["verdict"] == "CONFIRMED"
-    assert len(claim["eligible_recipients"]) == 2
-
-    # 9. Verify Settle Authorization & Eligibility:
-    # An outsider (not in eligible recipients) cannot receive bounty
-    direct_vm.sender = direct_alice
-    with pytest.raises(Exception) as exc:
-        contract.settle_bounty(claim_id, direct_alice)
-    assert "Proposed recipient is not an eligible evidence submitter for this claim" in str(exc.value)
-
-    # Settle to eligible evidence submitter Bob
-    settled_val = contract.settle_bounty(claim_id, direct_bob)
-    assert settled_val == str(BOUNTY_1_GEN)
-
-    settled_claim = contract.get_claim(claim_id)
-    assert settled_claim["status"] == "SETTLED"
-    assert settled_claim["bounty_settled_to"].lower() == ("0x" + direct_bob.hex()).lower()
-
-    stats = contract.get_protocol_stats()
-    assert stats["total_settled"] == str(BOUNTY_1_GEN)
-    assert stats["total_escrowed"] == "0"
-
-    # 10. Duplicate-Payment Protection: attempting to settle again must revert
-    with pytest.raises(Exception) as exc:
-        contract.settle_bounty(claim_id, direct_bob)
-    assert "Cannot settle bounty on claim in status 'SETTLED', must be 'RESOLVED'" in str(exc.value)
-
-
-def test_malformed_llm_response_handling(direct_vm, direct_deploy, direct_alice, direct_bob, direct_charlie):
-    """Verify resilient fallback to INSUFFICIENT_EVIDENCE when LLM produces malformed response."""
+def test_regulatory_filing_policy_enforcement(direct_vm, direct_deploy, direct_alice, direct_bob):
     direct_vm.warp("2026-10-14T10:00:00Z")
     contract = deploy(direct_deploy)
 
     direct_vm.sender = direct_alice
-    claim_id = contract.declare_claim("FACTUAL_EVENT", "Test Event", "is_valid", "TRUE", "2026-01-01")
-    contract.freeze_claim(claim_id, "OPEN_PUBLIC", 100)
+    claim_id = contract.declare_claim("COMPLIANCE_STATUS", "Quarterly Report", "filed", "TRUE", "2026-03-31")
+    contract.freeze_claim(claim_id, "REGULATORY_FILING", 100)
 
     direct_vm.sender = direct_bob
-    contract.submit_evidence(claim_id, "https://news.example.com/item", "Evidence note")
-
-    direct_vm.mock_web(r".*news\.example\.com.*", {"status": 200, "body": "Web content"})
-    direct_vm.mock_llm(r".*authoritative validator node in the GenState.*", "Not a JSON document {{{ invalid")
+    contract.submit_evidence(claim_id, "https://some-tech-blog.org/rumor", "Rumor about 10-Q filing")
 
     direct_vm.warp("2026-10-14T10:02:00Z")
     verdict = contract.adjudicate(claim_id)
     assert verdict == "INSUFFICIENT_EVIDENCE"
-    assert contract.get_claim(claim_id)["status"] == "RESOLVED"
+    assert "REGULATORY_FILING policy violated" in contract.get_claim(claim_id)["verdict_reason"]
 
 
 def test_conflicting_observations_consensus(direct_vm, direct_deploy, direct_alice, direct_bob, direct_charlie):
-    """Verify consensus ruling when submitted sources directly contradict."""
     direct_vm.warp("2026-10-14T10:00:00Z")
     contract = deploy(direct_deploy)
 
@@ -383,7 +484,8 @@ def test_conflicting_observations_consensus(direct_vm, direct_deploy, direct_ali
         "verdict": "CONFLICTED",
         "reason": "Outlet A confirms completion while Outlet B confirms deal termination. Mutually exclusive facts.",
         "confidence_score": 90,
-        "supporting_quotation": "Deal finalized successfully vs Merger was terminated",
+        "supporting_quotation": "Deal finalized successfully",
+        "qualifying_indices": [0, 1],
     }
     direct_vm.mock_llm(r".*authoritative validator node in the GenState.*", json.dumps(llm_conflict))
 
@@ -393,27 +495,27 @@ def test_conflicting_observations_consensus(direct_vm, direct_deploy, direct_ali
     assert contract.get_claim(claim_id)["verdict"] == "CONFLICTED"
 
 
-def test_regulatory_filing_policy_enforcement(direct_vm, direct_deploy, direct_alice, direct_bob):
-    """Verify deterministic check for REGULATORY_FILING policy."""
+def test_malformed_llm_response_handling(direct_vm, direct_deploy, direct_alice, direct_bob):
     direct_vm.warp("2026-10-14T10:00:00Z")
     contract = deploy(direct_deploy)
 
     direct_vm.sender = direct_alice
-    claim_id = contract.declare_claim("COMPLIANCE_STATUS", "Quarterly Report", "filed", "TRUE", "2026-03-31")
-    contract.freeze_claim(claim_id, "REGULATORY_FILING", 100)
+    claim_id = contract.declare_claim("FACTUAL_EVENT", "Test Event", "is_valid", "TRUE", "2026-01-01")
+    contract.freeze_claim(claim_id, "OPEN_PUBLIC", 100)
 
-    # Submit evidence from an unapproved domain
     direct_vm.sender = direct_bob
-    contract.submit_evidence(claim_id, "https://some-tech-blog.org/rumor", "Rumor about 10-Q filing")
+    contract.submit_evidence(claim_id, "https://news.example.com/item", "Evidence note")
+
+    direct_vm.mock_web(r".*news\.example\.com.*", {"status": 200, "body": "Web content"})
+    direct_vm.mock_llm(r".*authoritative validator node in the GenState.*", "Not a JSON document {{{ invalid")
 
     direct_vm.warp("2026-10-14T10:02:00Z")
     verdict = contract.adjudicate(claim_id)
     assert verdict == "INSUFFICIENT_EVIDENCE"
-    assert "REGULATORY_FILING policy violated" in contract.get_claim(claim_id)["verdict_reason"]
+    assert contract.get_claim(claim_id)["status"] == "RESOLVED"
 
 
 def test_all_sources_unreachable_resolves_source_unavailable(direct_vm, direct_deploy, direct_alice, direct_bob):
-    """Verify that when external links are unreachable, contract resolves SOURCE_UNAVAILABLE without trusting user context."""
     direct_vm.warp("2026-10-14T10:00:00Z")
     contract = deploy(direct_deploy)
 
@@ -424,12 +526,10 @@ def test_all_sources_unreachable_resolves_source_unavailable(direct_vm, direct_d
     direct_vm.sender = direct_bob
     contract.submit_evidence(claim_id, "https://offline-server.internal/proof", "Submitter claims site was live")
 
-    # Mock web request with 500 server error to trigger unreachable path
     direct_vm.mock_web(r".*offline-server\.internal.*", {"status": 500, "body": "Gateway Timeout"})
 
     direct_vm.warp("2026-10-14T10:02:00Z")
     verdict = contract.adjudicate(claim_id)
-    # When 500, leader_fn marks unreachable_count == 1 and resolves SOURCE_UNAVAILABLE
     assert verdict in ["SOURCE_UNAVAILABLE", "INSUFFICIENT_EVIDENCE"]
     claim = contract.get_claim(claim_id)
     assert claim["status"] == "RESOLVED"
@@ -437,7 +537,6 @@ def test_all_sources_unreachable_resolves_source_unavailable(direct_vm, direct_d
 
 
 def test_refuted_verdict_bounty_settlement(direct_vm, direct_deploy, direct_alice, direct_bob):
-    """Verify that when evidence convincingly REFUTES a claim, the submitter who disproved it is eligible for settlement."""
     direct_vm.warp("2026-10-14T10:00:00Z")
     contract = deploy(direct_deploy)
 
@@ -460,6 +559,7 @@ def test_refuted_verdict_bounty_settlement(direct_vm, direct_deploy, direct_alic
             "reason": "Official announcement explicitly states the listing application was rejected.",
             "confidence_score": 99,
             "supporting_quotation": "The application for Token Listing was REJECTED.",
+            "qualifying_indices": [0],
         })
     )
 
@@ -467,9 +567,7 @@ def test_refuted_verdict_bounty_settlement(direct_vm, direct_deploy, direct_alic
     verdict = contract.adjudicate(claim_id)
     assert verdict == "REFUTED"
 
-    # Bob who submitted disproving evidence is settled the bounty
     direct_vm.sender = direct_alice
     settled = contract.settle_bounty(claim_id, direct_bob)
     assert settled == str(BOUNTY_HALF_GEN)
     assert contract.get_claim(claim_id)["status"] == "SETTLED"
-

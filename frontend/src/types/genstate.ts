@@ -3,8 +3,10 @@ export type ClaimStatus =
   | "EVIDENCE_OPEN"
   | "ADJUDICATING"
   | "RESOLVED"
+  | "PARTIALLY_SETTLED"
   | "SETTLED"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "REFUNDED";
 
 export type ClaimType =
   | "STATE_TRANSITION"
@@ -38,12 +40,17 @@ export interface StateClaim {
   reference_date: string;
   source_policy: AdmissibilityPolicy | string;
   window_seconds: number;
+  opened_at?: number;
+  evidence_deadline?: number;
   status: ClaimStatus;
   verdict?: AdjudicationVerdict | string;
   verdict_reason?: string;
   adjudication_time?: string;
   evidence_count: number;
   bounty_amount: string;
+  funders?: string[];
+  qualifying_recipients?: string[];
+  bounty_settled_recipients?: string[];
 }
 
 export interface EvidenceRecord {
@@ -54,6 +61,15 @@ export interface EvidenceRecord {
   explanation: string;
 }
 
+export interface SourceFingerprintRecord {
+  evidence_id: string;
+  url: string;
+  domain: string;
+  apex_domain: string;
+  sha256_fingerprint: string;
+  fetch_status: string;
+}
+
 export interface AdjudicationResult {
   claim_id: string;
   verdict: AdjudicationVerdict | string;
@@ -61,6 +77,10 @@ export interface AdjudicationResult {
   confidence_score: number;
   adjudicated_at: string;
   evidence_count: number;
+  source_fingerprints?: SourceFingerprintRecord[];
+  quotation_verified?: boolean;
+  supporting_quotation?: string;
+  qualifying_recipients?: string[];
 }
 
 export interface ProtocolStats {
@@ -71,6 +91,7 @@ export interface ProtocolStats {
   total_evidence: number;
   total_escrowed: string;
   total_settled: string;
+  total_refunded?: string;
   supported_policies: string[];
   supported_claim_types: string[];
 }
