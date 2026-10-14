@@ -1,15 +1,14 @@
 """
-Comprehensive Test Suite for GenState Protocol.
+Static AST and Source Analysis Tests for GenState Protocol.
 Validates syntax, contract structure, state lifecycles, admissibility policies,
 and consensus prompt definitions.
 """
 
-import json
 import pytest
 
 
 def test_contract_compilation():
-    """Verify contracts/gen_state.py compiles cleanly without errors."""
+    """Verify contracts/gen_state.py contains required structures and methods."""
     with open("contracts/gen_state.py", "r", encoding="utf-8") as f:
         content = f.read()
     assert '# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }' in content
@@ -21,6 +20,7 @@ def test_contract_compilation():
     assert "def adjudicate(" in content
     assert "def settle_bounty(" in content
     assert "def cancel_claim(" in content
+    assert "def refund_bounty(" in content
     assert "def get_protocol_stats(" in content
     assert "def get_claim(" in content
     assert "def list_claims(" in content
@@ -32,8 +32,8 @@ def test_no_forbidden_imports():
     """Verify strictly zero forbidden standard library imports."""
     with open("contracts/gen_state.py", "r", encoding="utf-8") as f:
         lines = f.readlines()
-    
-    forbidden = ["import os", "import sys", "import subprocess", "import random", "import math", "import re", "import hashlib", "import typing"]
+
+    forbidden = ["import os", "import sys", "import subprocess", "import random", "import math", "import typing"]
     for line in lines:
         for f_import in forbidden:
             assert f_import not in line, f"Forbidden import found: {line}"
@@ -43,17 +43,22 @@ def test_allowed_imports_only():
     """Verify only allowed GenVM imports exist."""
     with open("contracts/gen_state.py", "r", encoding="utf-8") as f:
         lines = f.readlines()
-    
+
     import_lines = [l.strip() for l in lines if l.strip().startswith("import ") or l.strip().startswith("from ")]
     for imp in import_lines:
-        assert imp in ["from genlayer import *", "import json"], f"Unexpected import: {imp}"
+        assert imp in [
+            "from genlayer import *",
+            "import json",
+            "import datetime",
+            "import hashlib",
+        ], f"Unexpected import: {imp}"
 
 
 def test_closure_storage_purity():
     """Verify that leader_fn closure does not leak or reference self."""
     with open("contracts/gen_state.py", "r", encoding="utf-8") as f:
         lines = f.readlines()
-    
+
     inside_leader = False
     leader_lines = []
     for line in lines:
@@ -61,8 +66,7 @@ def test_closure_storage_purity():
             inside_leader = True
             continue
         if inside_leader:
-            # Check indentation: leader is indented at 8 spaces (or 2 tabs)
-            if line.startswith("        ") or line.strip() == "":
+            if line.startswith("            ") or line.strip() == "":
                 leader_lines.append(line)
             else:
                 inside_leader = False

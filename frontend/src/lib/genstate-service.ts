@@ -33,7 +33,7 @@ class LiveGenStateService {
   }
 
   /**
-   * Request browser wallet to switch to or register GenLayer StudioNet.
+   * Request browser wallet to switch to or register GenLayer StudioNet (Chain ID 61999).
    */
   public async switchOrAddStudioNet(): Promise<void> {
     if (typeof window === "undefined" || !(window as any).ethereum) return;
@@ -41,7 +41,7 @@ class LiveGenStateService {
     try {
       await ethereum.request({
         method: "wallet_switchEthereumChain",
-        params: [{ chainId: "0xf22f" }], // 61999
+        params: [{ chainId: GENSTATE_CONFIG.chainIdHex }], // 0xf22f (61999)
       });
     } catch (switchError: any) {
       if (switchError.code === 4902 || switchError.data?.originalError?.code === 4902) {
@@ -50,10 +50,10 @@ class LiveGenStateService {
             method: "wallet_addEthereumChain",
             params: [
               {
-                chainId: "0xf22f",
+                chainId: GENSTATE_CONFIG.chainIdHex,
                 chainName: "Genlayer Studio Network",
                 nativeCurrency: { name: "GEN Token", symbol: "GEN", decimals: 18 },
-                rpcUrls: ["https://studio.genlayer.com/api"],
+                rpcUrls: [GENSTATE_CONFIG.rpcUrl],
                 blockExplorerUrls: ["https://explorer-studio.genlayer.com"],
               },
             ],
@@ -67,6 +67,7 @@ class LiveGenStateService {
 
   /**
    * Connect wallet on explicit user action.
+   * Explicitly configures connected browser wallet provider (EIP-1193 window.ethereum).
    */
   public async connectWallet(
     type: "studionet" | "browser" = "studionet"
@@ -89,10 +90,11 @@ class LiveGenStateService {
           // Gracefully continue even if switch rejected
         }
 
-        // Initialize client configured with the browser address
+        // Initialize client explicitly configured with browser wallet provider
         this.client = createClient({
           chain: studionet,
           account: this.browserAddress as `0x${string}`,
+          provider: ethereum,
         });
 
         const balance = await this.ensureBalance();
@@ -141,8 +143,6 @@ class LiveGenStateService {
 
   /**
    * Get the real balance of the currently active account.
-   * If browser wallet is connected, queries window.ethereum (user's provider)
-   * and GenLayer StudioNet RPC for the user's browser address, displaying their real GEN balance.
    */
   public async ensureBalance(): Promise<string> {
     const activeAddress = this.getAccountAddress();
@@ -213,7 +213,7 @@ class LiveGenStateService {
 
     return {
       protocol_name: String(raw.protocol_name || "GenState"),
-      version: String(raw.version || "1.0.0"),
+      version: String(raw.version || "1.1.0"),
       admin: String(raw.admin || ""),
       total_claims: Number(raw.total_claims || 0),
       total_evidence: Number(raw.total_evidence || 0),
@@ -340,7 +340,51 @@ class LiveGenStateService {
   }
 
   /**
+   * Authoritative transaction finalization check:
+   * Verifies both that transaction reached FINALIZED and that GenVM execution succeeded.
+   */
+  public async waitForFinalizedSuccess(
+    txHash: string,
+    retries = 60,
+    interval = 3000
+  ): Promise<any> {
+    const runner = this.client || this.readClient;
+    const receipt = await runner.waitForTransactionReceipt({
+      hash: txHash,
+      status: TransactionStatus.FINALIZED,
+      retries,
+      interval,
+    });
+
+    const finalized =
+      receipt.statusName === TransactionStatus.FINALIZED ||
+      Number(receipt.status) === 7 ||
+      String(receipt.status).toLowerCase() === "finalized";
+
+    const leaderReceiptRaw = (receipt as any).consensus_data?.leader_receipt;
+    const leaderReceipts = Array.isArray(leaderReceiptRaw)
+      ? leaderReceiptRaw
+      : leaderReceiptRaw
+        ? [leaderReceiptRaw]
+        : [];
+
+    const succeeded =
+      receipt.txExecutionResultName === "FINISHED_WITH_RETURN" ||
+      Number(receipt.txExecutionResult) === 1 ||
+      leaderReceipts.some((item: any) => item?.execution_result === "SUCCESS");
+
+    if (!finalized || !succeeded) {
+      throw new Error(
+        `GenLayer transaction finalized without success. Status: ${receipt.statusName ?? receipt.status}, Result: ${receipt.txExecutionResultName ?? receipt.txExecutionResult ?? "FAILED"}`
+      );
+    }
+
+    return receipt;
+  }
+
+  /**
    * Broadcast real on-chain transaction: declare_claim.
+   * Deterministically queries created claim instead of deriving solely from counter.
    */
   public async declareClaim(
     claimType: string,
@@ -358,16 +402,19 @@ class LiveGenStateService {
       args: [claimType, subject, predicate, assertedValue, referenceDate],
     });
 
-    await this.client.waitForTransactionReceipt({
-      hash: txHash,
-      status: TransactionStatus.FINALIZED,
-      retries: 50,
-      interval: 3000,
-    });
+    await this.waitForFinalizedSuccess(txHash);
 
-    const stats = await this.fetchProtocolStats();
-    const claimId = `CLAIM-${stats.total_claims}`;
+    // Deterministic Claim ID Retrieval: search claims matching creator and subject
+    const claims = await this.fetchClaims(0, 50);
+    const activeAddr = this.getAccountAddress().toLowerCase();
+    const createdClaim = claims.find(
+      (c) =>
+        c.creator.toLowerCase() === activeAddr &&
+        c.subject === subject &&
+        c.predicate === predicate
+    );
 
+    const claimId = createdClaim ? createdClaim.id : `CLAIM-${claims.length}`;
     return { txHash, claimId };
   }
 
@@ -388,14 +435,31 @@ class LiveGenStateService {
       args: [claimId, sourcePolicy, windowSeconds],
     });
 
-    await this.client.waitForTransactionReceipt({
-      hash: txHash,
-      status: TransactionStatus.FINALIZED,
-      retries: 50,
-      interval: 3000,
+    await this.waitForFinalizedSuccess(txHash);
+    return { txHash };
+  }
+
+  /**
+   * Broadcast real on-chain transaction: fund_bounty with genuine native GEN.
+   */
+  public async fundBounty(
+    claimId: string,
+    amountWei: bigint | string
+  ): Promise<{ txHash: string; newBounty: string }> {
+    this.requireConnectedClient();
+    await this.ensureBalance();
+
+    const value = BigInt(amountWei);
+    const txHash = await this.client.writeContract({
+      address: GENSTATE_CONFIG.contractAddress,
+      functionName: "fund_bounty",
+      args: [claimId],
+      value,
     });
 
-    return { txHash };
+    await this.waitForFinalizedSuccess(txHash);
+    const claim = await this.fetchClaim(claimId);
+    return { txHash, newBounty: claim.bounty_amount };
   }
 
   /**
@@ -415,13 +479,7 @@ class LiveGenStateService {
       args: [claimId, sourceUrl, explanation],
     });
 
-    await this.client.waitForTransactionReceipt({
-      hash: txHash,
-      status: TransactionStatus.FINALIZED,
-      retries: 50,
-      interval: 3000,
-    });
-
+    await this.waitForFinalizedSuccess(txHash);
     return { txHash };
   }
 
@@ -439,19 +497,14 @@ class LiveGenStateService {
       args: [claimId],
     });
 
-    await this.client.waitForTransactionReceipt({
-      hash: txHash,
-      status: TransactionStatus.FINALIZED,
-      retries: 60,
-      interval: 3000,
-    });
-
+    await this.waitForFinalizedSuccess(txHash, 90, 3000);
     const claim = await this.fetchClaim(claimId);
     return { txHash, verdict: claim.verdict || "RESOLVED" };
   }
 
   /**
    * Broadcast real on-chain transaction: settle_bounty.
+   * Executes genuine native GEN movement to eligible recipient.
    */
   public async settleBounty(
     claimId: string,
@@ -466,13 +519,41 @@ class LiveGenStateService {
       args: [claimId, recipientAddress],
     });
 
-    await this.client.waitForTransactionReceipt({
-      hash: txHash,
-      status: TransactionStatus.FINALIZED,
-      retries: 50,
-      interval: 3000,
+    await this.waitForFinalizedSuccess(txHash);
+    return { txHash };
+  }
+
+  /**
+   * Broadcast real on-chain transaction: refund_bounty.
+   */
+  public async refundBounty(claimId: string): Promise<{ txHash: string }> {
+    this.requireConnectedClient();
+    await this.ensureBalance();
+
+    const txHash = await this.client.writeContract({
+      address: GENSTATE_CONFIG.contractAddress,
+      functionName: "refund_bounty",
+      args: [claimId],
     });
 
+    await this.waitForFinalizedSuccess(txHash);
+    return { txHash };
+  }
+
+  /**
+   * Broadcast real on-chain transaction: cancel_claim.
+   */
+  public async cancelClaim(claimId: string): Promise<{ txHash: string }> {
+    this.requireConnectedClient();
+    await this.ensureBalance();
+
+    const txHash = await this.client.writeContract({
+      address: GENSTATE_CONFIG.contractAddress,
+      functionName: "cancel_claim",
+      args: [claimId],
+    });
+
+    await this.waitForFinalizedSuccess(txHash);
     return { txHash };
   }
 }

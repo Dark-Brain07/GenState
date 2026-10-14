@@ -10,18 +10,21 @@ GenState is an intelligent state consensus protocol built natively on GenLayer's
 
 | Parameter | Value |
 | :--- | :--- |
-| **Network** | **GenLayer StudioNet** (Chain ID: `4224`) |
-| **Contract Name** | `GenState` |
-| **Deployed Contract Address** | [`0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28`](https://explorer-studio.genlayer.com/address/0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28) |
-| **Deployment Transaction Hash** | `0x6f3a36dd106c295e7a1b7c8dc097f817ad0b59b860a8c0649c08c8030bc8e93f` |
-| **Genesis Write Transaction Hash** | `0xf74536424a92c9c8e2311cea3357d58552df557593662e521bb3cc2f41f572d4` |
-| **Live Declare Tx Hash (CLAIM-3)** | `0x3e55be0e7929b7ae88fa77dcd7545a60f4120cb607ef6b6821a1f089915498e7` |
-| **Live Evidence Tx Hash (EVID-1)** | `0x492c58a28459234b3bdc2052abb3c45437bde06125917f551b90e7dd32bd8bd2` |
-| **Live Multi-Validator Adjudication Tx** | `0x1b9d9cc5424efbff94be28ed71699841f6c4c4da7e98315868d6d385f0e1f505` |
-| **Consensus Finality** | Finalized (Status: 7, 5/5 validator quorum agree) |
+| **Network** | **GenLayer StudioNet** (Chain ID: `61999` / `0xf22f`) |
+| **Contract Name** | `GenState` (v1.1.0) |
+| **Deployed Contract Address** | [`0x7e131cDcCd7CfFB2E78A527a369c88BCEd770cf6`](https://explorer-studio.genlayer.com/address/0x7e131cDcCd7CfFB2E78A527a369c88BCEd770cf6) |
+| **Deployment Transaction Hash** | [`0xc7d41232dcdfdd518aa4793297e1b02468242a2a2a55991cd9e8bbccb05726ea`](https://explorer-studio.genlayer.com/tx/0xc7d41232dcdfdd518aa4793297e1b02468242a2a2a55991cd9e8bbccb05726ea) |
+| **Live Declare Tx (CLAIM-1)** | [`0x6063c0d9c30d521f6673534ec261c44a30412874a6b7e9b7faac7b3f024a9465`](https://explorer-studio.genlayer.com/tx/0x6063c0d9c30d521f6673534ec261c44a30412874a6b7e9b7faac7b3f024a9465) |
+| **Live Fund Bounty Tx (0.5 GEN)** | [`0x88a8e980fd8d844f9ae4183a673fe8339262815e3354cd194b1888ceb0771300`](https://explorer-studio.genlayer.com/tx/0x88a8e980fd8d844f9ae4183a673fe8339262815e3354cd194b1888ceb0771300) |
+| **Live Freeze Claim Tx (60s Window)** | [`0xcfb12b04462169569b9cfe0bd4b097b29b480eecaa2ee57cc5a99855711ee53e`](https://explorer-studio.genlayer.com/tx/0xcfb12b04462169569b9cfe0bd4b097b29b480eecaa2ee57cc5a99855711ee53e) |
+| **Live Evidence Submit Tx (EVID-1)** | [`0xc46628961bc87aa0f037fa235b134c61f90d1a4d3d0a33267d61f6aad45feb05`](https://explorer-studio.genlayer.com/tx/0xc46628961bc87aa0f037fa235b134c61f90d1a4d3d0a33267d61f6aad45feb05) |
+| **Live Consensus Adjudication Tx (CONFIRMED)** | [`0x861a3248e7abf6e830f09394ecfccda2ceb550a9aabd51e888d8189c3da68bb6`](https://explorer-studio.genlayer.com/tx/0x861a3248e7abf6e830f09394ecfccda2ceb550a9aabd51e888d8189c3da68bb6) |
+| **Live Native GEN Settlement Tx (+0.5 GEN)** | [`0x1ccf5ece4a8a92c5f394980d2b965f405880e39df18584d78f946a7df4935d1c`](https://explorer-studio.genlayer.com/tx/0x1ccf5ece4a8a92c5f394980d2b965f405880e39df18584d78f946a7df4935d1c) |
+| **Live Draft Cancellation Refund Tx** | [`0xa1d852cd3627f2ed05835a8006974a62894b82850e14fb8c93ee49872a2c7076`](https://explorer-studio.genlayer.com/tx/0xa1d852cd3627f2ed05835a8006974a62894b82850e14fb8c93ee49872a2c7076) |
+| **Consensus Finality** | Finalized (Status: 7, multi-validator quorum agree) |
 | **Live Vercel DApp** | [https://genstate.vercel.app](https://genstate.vercel.app) |
 | **Medium Article** | [Read on Medium](https://medium.com/@engraju007/introducing-genstate-decentralized-semantic-state-adjudication-on-genlayer-c1363386f7cc) |
-| **Explorer Link** | [View on GenLayer Studio Explorer](https://explorer-studio.genlayer.com/address/0x61A4F2D9fCe50dC3Cb763fC455ae8c669739dd28) |
+| **Explorer Link** | [View on GenLayer Studio Explorer](https://explorer-studio.genlayer.com/address/0x7e131cDcCd7CfFB2E78A527a369c88BCEd770cf6) |
 
 ---
 

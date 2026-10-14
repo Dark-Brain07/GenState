@@ -28,42 +28,42 @@ def main():
         print(f"Error: Contract not found at {contract_path}")
         sys.exit(1)
 
-    print("=" * 70)
-    print("  GENSTATE INTELLIGENT CONTRACT - STUDIONET DEPLOYMENT PIPELINE  ")
-    print("=" * 70)
+    print("=" * 70, flush=True)
+    print("  GENSTATE INTELLIGENT CONTRACT - STUDIONET DEPLOYMENT PIPELINE  ", flush=True)
+    print("=" * 70, flush=True)
 
     # 1. Setup Deployer Account
     raw_key = os.environ.get("DEPLOYER_PRIVATE_KEY", "").strip()
     if raw_key:
         account = gl.create_account(raw_key if raw_key.startswith("0x") else f"0x{raw_key}")
-        print(f"Using configured account from DEPLOYER_PRIVATE_KEY: {account.address}")
+        print(f"Using configured account from DEPLOYER_PRIVATE_KEY: {account.address}", flush=True)
     else:
         account = gl.create_account()
-        print(f"Generated fresh deployment account: {account.address}")
+        print(f"Generated fresh deployment account: {account.address}", flush=True)
 
     client = gl.create_client(chain=studionet, account=account)
 
     # 2. Check and Fund Balance
     balance = client.get_balance(account.address)
-    print(f"Initial Account Balance: {balance} wei")
+    print(f"Initial Account Balance: {balance} wei", flush=True)
     if balance < 10**17:
-        print("Requesting testnet funds via StudioNet faucet...")
+        print("Requesting testnet funds via StudioNet faucet...", flush=True)
         try:
             client.fund_account(account.address, 10**18)
-            time.sleep(2)
+            time.sleep(3)
             balance = client.get_balance(account.address)
-            print(f"Updated Account Balance: {balance} wei (1 GEN)")
+            print(f"Updated Account Balance: {balance} wei (1 GEN)", flush=True)
         except Exception as e:
-            print(f"Faucet note: {e}")
+            print(f"Faucet note: {e}", flush=True)
 
     # 3. Read contract code
     contract_code = contract_path.read_text(encoding="utf-8")
-    print("\nDeploying GenState intelligent contract to StudioNet...")
+    print("\nDeploying GenState intelligent contract to StudioNet...", flush=True)
 
     try:
         tx_hash = client.deploy_contract(code=contract_code, args=[])
-        print(f"Deployment Transaction Hash: {tx_hash}")
-        print("Waiting for GenLayer validator consensus and finality (interval: 3s)...")
+        print(f"Deployment Transaction Hash: {tx_hash}", flush=True)
+        print("Waiting for GenLayer validator consensus and finality (interval: 3s)...", flush=True)
 
         receipt = client.wait_for_transaction_receipt(
             transaction_hash=tx_hash,
@@ -72,9 +72,9 @@ def main():
             retries=90,
         )
 
-        print("\n" + "=" * 70)
-        print("  DEPLOYMENT FINALIZED SUCCESSFULLY!  ")
-        print("=" * 70)
+        print("\n" + "=" * 70, flush=True)
+        print("  DEPLOYMENT FINALIZED SUCCESSFULLY!  ", flush=True)
+        print("=" * 70, flush=True)
 
         # Extract address safely
         contract_address = None
