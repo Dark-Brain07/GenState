@@ -4,6 +4,8 @@
 
 GenState is an intelligent state consensus protocol built natively on GenLayer's GenVM. It establishes a verifiable bridge between off-chain reality and on-chain state by turning unstructured public web evidence into cryptographically settled semantic state records.
 
+> 📋 **Official Steward Review Resolution**: Complete requirement-by-requirement audit matrix, code locations, and verified on-chain proofs are documented in [docs/STEWARD_REVIEW_RESOLUTION_REPORT.md](docs/STEWARD_REVIEW_RESOLUTION_REPORT.md).
+
 ---
 
 ## 🚀 Live StudioNet Deployment (v1.2.0)
@@ -17,6 +19,7 @@ GenState is an intelligent state consensus protocol built natively on GenLayer's
 | **Deployer / Admin Address** | `0x8EBFC0d85233F56f777F8e16793bC758608019bE` |
 | **Live Vercel DApp** | [https://genstate.vercel.app](https://genstate.vercel.app) |
 | **GitHub Repository** | [https://github.com/Dark-Brain07/GenState](https://github.com/Dark-Brain07/GenState) |
+| **Steward Review Resolution Report** | [docs/STEWARD_REVIEW_RESOLUTION_REPORT.md](docs/STEWARD_REVIEW_RESOLUTION_REPORT.md) |
 | **Medium Article** | [Read on Medium](https://medium.com/@engraju007/introducing-genstate-decentralized-semantic-state-adjudication-on-genlayer-c1363386f7cc) |
 | **GenVM Runner Pin** | `py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6` |
 
