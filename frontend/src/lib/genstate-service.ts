@@ -121,6 +121,51 @@ class LiveGenStateService {
   }
 
   /**
+   * Dynamically update active browser wallet account upon accountsChanged event.
+   */
+  public async setBrowserAccount(newAddress: string): Promise<string> {
+    if (!newAddress) {
+      this.disconnectWallet();
+      return "0.0000 GEN";
+    }
+    this.browserAddress = newAddress;
+    this.connectedType = "browser";
+    this.account = null;
+
+    if (typeof window !== "undefined" && (window as any).ethereum) {
+      this.client = createClient({
+        chain: studionet,
+        account: this.browserAddress as `0x${string}`,
+        provider: (window as any).ethereum,
+      });
+    }
+
+    return await this.ensureBalance();
+  }
+
+  /**
+   * Enforces that the browser wallet is connected to GenLayer StudioNet before permitting write transactions.
+   */
+  public async assertCorrectNetwork(): Promise<void> {
+    if (this.connectedType === "browser" && typeof window !== "undefined" && (window as any).ethereum) {
+      try {
+        const chainId = await (window as any).ethereum.request({ method: "eth_chainId" });
+        const isStudioNet = chainId === "0xf22f" || chainId === "61999" || chainId === 61999;
+        if (!isStudioNet) {
+          await this.switchOrAddStudioNet();
+          const recheck = await (window as any).ethereum.request({ method: "eth_chainId" });
+          const recheckIsStudio = recheck === "0xf22f" || recheck === "61999" || recheck === 61999;
+          if (!recheckIsStudio) {
+            throw new Error("Active network must be GenLayer StudioNet (Chain ID: 61999 / 0xf22f). Please switch networks in your wallet.");
+          }
+        }
+      } catch (err: any) {
+        throw new Error(err.message || "Failed to verify or switch active network to GenLayer StudioNet.");
+      }
+    }
+  }
+
+  /**
    * Disconnect the active wallet session.
    */
   public disconnectWallet(): void {
@@ -409,6 +454,7 @@ class LiveGenStateService {
     referenceDate: string
   ): Promise<{ txHash: string; claimId: string }> {
     this.requireConnectedClient();
+    await this.assertCorrectNetwork();
     await this.ensureBalance();
 
     const txHash = await this.client.writeContract({
@@ -417,19 +463,17 @@ class LiveGenStateService {
       args: [claimType, subject, predicate, assertedValue, referenceDate],
     });
 
-    await this.waitForFinalizedSuccess(txHash);
+    const receipt = await this.waitForFinalizedSuccess(txHash);
 
-    // Deterministic Claim ID Retrieval: search claims matching creator and subject
-    const claims = await this.fetchClaims(0, 50);
-    const activeAddr = this.getAccountAddress().toLowerCase();
-    const createdClaim = claims.find(
-      (c) =>
-        c.creator.toLowerCase() === activeAddr &&
-        c.subject === subject &&
-        c.predicate === predicate
-    );
+    // Retrieve deterministic claim ID from receipt return value or authoritative stats
+    let claimId = "";
+    if (receipt && receipt.returnValue && typeof receipt.returnValue === "string" && receipt.returnValue.startsWith("CLAIM-")) {
+      claimId = receipt.returnValue;
+    } else {
+      const stats = await this.fetchProtocolStats();
+      claimId = `CLAIM-${stats.total_claims}`;
+    }
 
-    const claimId = createdClaim ? createdClaim.id : `CLAIM-${claims.length}`;
     return { txHash, claimId };
   }
 
@@ -442,6 +486,7 @@ class LiveGenStateService {
     windowSeconds = 86400
   ): Promise<{ txHash: string }> {
     this.requireConnectedClient();
+    await this.assertCorrectNetwork();
     await this.ensureBalance();
 
     const txHash = await this.client.writeContract({
@@ -462,6 +507,7 @@ class LiveGenStateService {
     amountWei: bigint | string
   ): Promise<{ txHash: string; newBounty: string }> {
     this.requireConnectedClient();
+    await this.assertCorrectNetwork();
     await this.ensureBalance();
 
     const value = BigInt(amountWei);
@@ -486,6 +532,7 @@ class LiveGenStateService {
     explanation: string
   ): Promise<{ txHash: string }> {
     this.requireConnectedClient();
+    await this.assertCorrectNetwork();
     await this.ensureBalance();
 
     const txHash = await this.client.writeContract({
@@ -504,6 +551,7 @@ class LiveGenStateService {
    */
   public async adjudicateClaim(claimId: string): Promise<{ txHash: string; verdict: string }> {
     this.requireConnectedClient();
+    await this.assertCorrectNetwork();
     await this.ensureBalance();
 
     const txHash = await this.client.writeContract({
@@ -526,6 +574,7 @@ class LiveGenStateService {
     recipientAddress: string
   ): Promise<{ txHash: string }> {
     this.requireConnectedClient();
+    await this.assertCorrectNetwork();
     await this.ensureBalance();
 
     const txHash = await this.client.writeContract({
@@ -543,6 +592,7 @@ class LiveGenStateService {
    */
   public async refundBounty(claimId: string): Promise<{ txHash: string }> {
     this.requireConnectedClient();
+    await this.assertCorrectNetwork();
     await this.ensureBalance();
 
     const txHash = await this.client.writeContract({
@@ -560,6 +610,7 @@ class LiveGenStateService {
    */
   public async cancelClaim(claimId: string): Promise<{ txHash: string }> {
     this.requireConnectedClient();
+    await this.assertCorrectNetwork();
     await this.ensureBalance();
 
     const txHash = await this.client.writeContract({
@@ -570,6 +621,49 @@ class LiveGenStateService {
 
     await this.waitForFinalizedSuccess(txHash);
     return { txHash };
+  }
+
+  /**
+   * Query pending recoverable balance for an address in wei.
+   */
+  public async getPendingRecovery(recipient?: string): Promise<string> {
+    const target = recipient || this.getAccountAddress();
+    if (!target) return "0";
+    try {
+      const runner = this.client || this.readClient;
+      const res = await runner.readContract({
+        address: GENSTATE_CONFIG.contractAddress,
+        functionName: "get_pending_recovery",
+        args: [target],
+      });
+      return String(res || "0");
+    } catch (err) {
+      console.warn("get_pending_recovery query error:", err);
+      return "0";
+    }
+  }
+
+  /**
+   * Broadcast real on-chain transaction: recover_failed_transfer.
+   * Allows claiming accumulated un-transferred balances via pull-recovery.
+   */
+  public async recoverFailedTransfer(recipient?: string): Promise<{ txHash: string; recoveredAmount: string }> {
+    this.requireConnectedClient();
+    await this.assertCorrectNetwork();
+    await this.ensureBalance();
+
+    const target = recipient || this.getAccountAddress();
+    const txHash = await this.client.writeContract({
+      address: GENSTATE_CONFIG.contractAddress,
+      functionName: "recover_failed_transfer",
+      args: [target],
+    });
+
+    const receipt = await this.waitForFinalizedSuccess(txHash);
+    return {
+      txHash,
+      recoveredAmount: receipt.returnValue ? String(receipt.returnValue) : "Recovered",
+    };
   }
 }
 

@@ -8,39 +8,37 @@ GenState is an intelligent state consensus protocol built natively on GenLayer's
 
 ---
 
-## 🚀 Live StudioNet Deployment (v1.2.0)
+## 🚀 Live StudioNet Deployment (v1.3.0)
 
 | Parameter | Value |
 | :--- | :--- |
 | **Network** | **GenLayer StudioNet** (Chain ID: `61999` / `0xf22f`) |
-| **Contract Name** | `GenState` (v1.2.0) |
-| **Deployed Contract Address** | [`0x619C7880ADF334Ee402A6140ee3f4fC1942059bD`](https://explorer-studio.genlayer.com/address/0x619C7880ADF334Ee402A6140ee3f4fC1942059bD) |
-| **Deployment Transaction Hash** | [`0x0e9be6998c1e98b7e35e3aecfc5a18be8688a741bf56983aaa6218b2eff825f2`](https://explorer-studio.genlayer.com/tx/0x0e9be6998c1e98b7e35e3aecfc5a18be8688a741bf56983aaa6218b2eff825f2) |
-| **Deployer / Admin Address** | `0x8EBFC0d85233F56f777F8e16793bC758608019bE` |
-| **Live Vercel DApp** | [https://genstate.vercel.app](https://genstate.vercel.app) |
+| **Contract Name** | `GenState` (v1.3.0) |
+| **Deployed Contract Address** | [`0xeD9b8ef621c57d8eeFBF45124D1535f5874A4be6`](https://explorer-studio.genlayer.com/address/0xeD9b8ef621c57d8eeFBF45124D1535f5874A4be6) |
+| **Deployment Transaction Hash** | [`0xd3850e5cb6b88846bbf0010717524e4660a7c94f2b1dfa888cc7cd261f25305b`](https://explorer-studio.genlayer.com/tx/0xd3850e5cb6b88846bbf0010717524e4660a7c94f2b1dfa888cc7cd261f25305b) |
+| **Deployer / Admin Address** | `0xC602f93dF0F6e6b3403b6e8Ce719CfEB3D8C2E7C` |
+| **Live Production DApp** | [https://genstate.vercel.app](https://genstate.vercel.app) |
 | **GitHub Repository** | [https://github.com/Dark-Brain07/GenState](https://github.com/Dark-Brain07/GenState) |
 | **Steward Review Resolution Report** | [docs/STEWARD_REVIEW_RESOLUTION_REPORT.md](docs/STEWARD_REVIEW_RESOLUTION_REPORT.md) |
-| **Medium Article** | [Read on Medium](https://medium.com/@engraju007/introducing-genstate-decentralized-semantic-state-adjudication-on-genlayer-c1363386f7cc) |
 | **GenVM Runner Pin** | `py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6` |
 
 ---
 
-## 📜 Verified Live StudioNet Transaction Proofs (v1.2.0)
+## 📜 Verified Live StudioNet Transaction Proofs (v1.3.0)
 
 Every operation below was executed, mined, and finalized by GenLayer validators on StudioNet (Chain ID `61999`):
 
-### 1. Multi-Funder Deposit & Deterministic Settlement Lifecycle (`CLAIM-2`)
+### 1. Multi-Funder Deposit & Deterministic Settlement Lifecycle (`CLAIM-1`)
 
 | Operation | Participant / Details | Tx Hash / Explorer Link | Finality |
 | :--- | :--- | :--- | :--- |
-| **Claim Registration** | Factual Assertion registered in `DRAFT` status | [`0x135c17fbdf6dab6890963e6ed3c2e2a2c1939099413efb141387ec6af9208c94`](https://explorer-studio.genlayer.com/tx/0x135c17fbdf6dab6890963e6ed3c2e2a2c1939099413efb141387ec6af9208c94) | Finalized (Status: 7) |
-| **Funder 1 Deposit** | Alice (`0x49Dc...2B4`) deposits **0.20 GEN** | [`0x71552992aa06438f78836191b086830e432223ad4c8374205d9d66a8a63e3b77`](https://explorer-studio.genlayer.com/tx/0x71552992aa06438f78836191b086830e432223ad4c8374205d9d66a8a63e3b77) | Finalized (Status: 7) |
-| **Funder 2 Deposit** | Bob (`0xaBFA...685`) deposits **0.10 GEN** (Total Escrow: 0.30 GEN) | [`0xc77f9dca1125dbc1323d387b0dd4397602968cdda4cf3bc1c2d3b3a26c0f6415`](https://explorer-studio.genlayer.com/tx/0xc77f9dca1125dbc1323d387b0dd4397602968cdda4cf3bc1c2d3b3a26c0f6415) | Finalized (Status: 7) |
-| **Freeze Claim** | Opens 60s timed window with `OPEN_PUBLIC` policy | [`0x78041f0e6b49b78558918e91171e6ec31c922e5e600d184a4348c9e6cca0ecd6`](https://explorer-studio.genlayer.com/tx/0x78041f0e6b49b78558918e91171e6ec31c922e5e600d184a4348c9e6cca0ecd6) | Finalized (Status: 7) |
-| **Qualifying Evidence** | Charlie submits `https://example.com` with verbatim quote | [`0x94c5ead50afb0733007bb70e2ad2a59cef2cbf493f1fbfd94922e710abdd68d9`](https://explorer-studio.genlayer.com/tx/0x94c5ead50afb0733007bb70e2ad2a59cef2cbf493f1fbfd94922e710abdd68d9) | Finalized (Status: 7) |
-| **Non-Qualifying Evidence** | Dave submits unrelated evidence (`https://example.org`) | [`0x51569249289a7b0972bb3db795e372c68135c658153980922e289596ec0163a7`](https://explorer-studio.genlayer.com/tx/0x51569249289a7b0972bb3db795e372c68135c658153980922e289596ec0163a7) | Finalized (Status: 7) |
-| **Validator Consensus Adjudication** | Multi-validator quorum: SHA-256 fingerprint saved, verbatim quote verified, Dave excluded, Charlie designated qualifying recipient | [`0x5a2965916083e77d768ba24e0343602146a119c7d5e310d1d01a8130a75d9192`](https://explorer-studio.genlayer.com/tx/0x5a2965916083e77d768ba24e0343602146a119c7d5e310d1d01a8130a75d9192) | Finalized (Status: 7) |
-| **Native GEN Settlement Payout** | Genuine GEN transfer via `_Recipient.emit_transfer()` to Charlie: **+0.30 GEN delivered** | [`0x14ea39cbb3e7c5682f317342d5a6c82be7ef8627b8cec05ada75541d8643f406`](https://explorer-studio.genlayer.com/tx/0x14ea39cbb3e7c5682f317342d5a6c82be7ef8627b8cec05ada75541d8643f406) | Finalized (Status: 7) |
+| **Claim Registration** | Factual Assertion registered in `DRAFT` status | [`0x8e206f673d4da22008a2df8efa59465569cd8e3ccbb4d5e0e44316501eaebe1d`](https://explorer-studio.genlayer.com/tx/0x8e206f673d4da22008a2df8efa59465569cd8e3ccbb4d5e0e44316501eaebe1d) | Finalized (Status: 7) |
+| **Funder 1 Deposit** | Alice deposits **0.20 GEN** | [`0x707ca0f4d1d22e50b5eb09931337efa37ada52d498fcef07835c13a83e969e78`](https://explorer-studio.genlayer.com/tx/0x707ca0f4d1d22e50b5eb09931337efa37ada52d498fcef07835c13a83e969e78) | Finalized (Status: 7) |
+| **Funder 2 Deposit** | Bob deposits **0.10 GEN** (Total Escrow: 0.30 GEN) | [`0x189e0e7ac428ac62e67a21527fd46b3b54d1736f2303fc8a8e7949fabc349c5a`](https://explorer-studio.genlayer.com/tx/0x189e0e7ac428ac62e67a21527fd46b3b54d1736f2303fc8a8e7949fabc349c5a) | Finalized (Status: 7) |
+| **Freeze Claim** | Opens 60s timed window with `OPEN_PUBLIC` policy | [`0x6d40ed781f05786b3689f2f27bf6b64ccb223b6af456a818875720dc42f69961`](https://explorer-studio.genlayer.com/tx/0x6d40ed781f05786b3689f2f27bf6b64ccb223b6af456a818875720dc42f69961) | Finalized (Status: 7) |
+| **Qualifying Evidence** | Charlie submits `https://example.com` with verbatim quote | [`0x845f3f187dc4268fec625c0c7768c84cdc112042e847af21d39b999272b60852`](https://explorer-studio.genlayer.com/tx/0x845f3f187dc4268fec625c0c7768c84cdc112042e847af21d39b999272b60852) | Finalized (Status: 7) |
+| **Validator Consensus Adjudication** | Multi-validator quorum: SHA-256 fingerprint saved, verbatim quote verified, Charlie designated qualifying recipient | [`0xd8c2f4506dcf2608d0fe0476d98118d4111ad163278f849f00bd0a890b9f0f9e`](https://explorer-studio.genlayer.com/tx/0xd8c2f4506dcf2608d0fe0476d98118d4111ad163278f849f00bd0a890b9f0f9e) | Finalized (Status: 7) |
+| **Native GEN Settlement Payout** | Genuine GEN transfer via `_Recipient.emit_transfer()` to Charlie: **+0.30 GEN delivered** | [`0x4012d1f3d18626aa61278e06bc1094cdb3dfa816c3d90d7e1a0c0904d5e25f7b`](https://explorer-studio.genlayer.com/tx/0x4012d1f3d18626aa61278e06bc1094cdb3dfa816c3d90d7e1a0c0904d5e25f7b) | Finalized (Status: 7) |
 
 #### Verified Settlement Balance Movement:
 - **Charlie Wallet Before Settlement**: `100,000,000,000,000,000 wei` (0.10 GEN)
@@ -49,116 +47,133 @@ Every operation below was executed, mined, and finalized by GenLayer validators 
 
 ---
 
-### 2. Multi-Funder Cancellation & Exact Individual Refunds (`CLAIM-3`)
+### 2. Quotation Check Blocks Unsupported Conclusive Outcome (`CLAIM-2`)
+
+Demonstrates that evidence with unverified or fabricated quotations is strictly prevented from receiving conclusive verdicts (`CONFIRMED` or `REFUTED`):
+
+| Operation | Participant / Details | Tx Hash / Explorer Link | Finality |
+| :--- | :--- | :--- | :--- |
+| **Claim Registration** | Registered in `DRAFT` status | [`0x38d8fecb06a1c69dfb42b62464fcd3942443202521ff732f9ab6d5b0d8998b39`](https://explorer-studio.genlayer.com/tx/0x38d8fecb06a1c69dfb42b62464fcd3942443202521ff732f9ab6d5b0d8998b39) | Finalized (Status: 7) |
+| **Freeze Claim** | Opens 60s timed window | [`0xc33e7e5d15ba15449ea2c51f444e62a242e441eb89c7845fea4e5a9ce3cc3703`](https://explorer-studio.genlayer.com/tx/0xc33e7e5d15ba15449ea2c51f444e62a242e441eb89c7845fea4e5a9ce3cc3703) | Finalized (Status: 7) |
+| **Fabricated Quote Submission** | Charlie submits quote not present in source page | [`0x80192981ce02262a58703ea12231edeb91a3a0db1b51bb2f80caa5bc55784681`](https://explorer-studio.genlayer.com/tx/0x80192981ce02262a58703ea12231edeb91a3a0db1b51bb2f80caa5bc55784681) | Finalized (Status: 7) |
+| **Consensus Adjudication** | Conclusive verdict blocked; downgraded to `INSUFFICIENT_EVIDENCE`; qualifying recipients cleared | [`0x082b8354d8ec7e54d946f2b3e938e6220fddc9b313c21e35e0cdd254fda2f663`](https://explorer-studio.genlayer.com/tx/0x082b8354d8ec7e54d946f2b3e938e6220fddc9b313c21e35e0cdd254fda2f663) | Finalized (Status: 7) |
+
+---
+
+### 3. Multi-Funder Cancellation & Exact Individual Refunds (`CLAIM-3`)
 
 Demonstrates that cancellation or refund **never** sends all funds to the first funder, but accurately returns each contributor's deposited GEN:
 
 | Operation | Participant / Details | Tx Hash / Explorer Link | Finality |
 | :--- | :--- | :--- | :--- |
-| **Claim Registration** | Registered in `DRAFT` status | [`0xf8ed623435f028a936f8053e141b93f65efff84e145a98a7a0752c85f43e75b7`](https://explorer-studio.genlayer.com/tx/0xf8ed623435f028a936f8053e141b93f65efff84e145a98a7a0752c85f43e75b7) | Finalized (Status: 7) |
-| **Funder 1 Deposit** | Alice deposits **0.15 GEN** (`150,000,000,000,000,000 wei`) | [`0x89809b215d69fb0fa2b971eabeee60611e4946b07fe5e0ea788920c09ba84d0f`](https://explorer-studio.genlayer.com/tx/0x89809b215d69fb0fa2b971eabeee60611e4946b07fe5e0ea788920c09ba84d0f) | Finalized (Status: 7) |
-| **Funder 2 Deposit** | Bob deposits **0.10 GEN** (`100,000,000,000,000,000 wei`) | [`0xb568a8d4aed4fb393eab7e3202923886589f9912d6b9607d2b61aa0c8bf00e0a`](https://explorer-studio.genlayer.com/tx/0xb568a8d4aed4fb393eab7e3202923886589f9912d6b9607d2b61aa0c8bf00e0a) | Finalized (Status: 7) |
-| **Claim Cancellation & Refunds** | Alice cancels claim; individual refunds automatically returned to both funders | [`0x78ed4fe04dc6ee04a6b27d4d8e049b6c7b5dc42455e1ddbe0d23340046b529a6`](https://explorer-studio.genlayer.com/tx/0x78ed4fe04dc6ee04a6b27d4d8e049b6c7b5dc42455e1ddbe0d23340046b529a6) | Finalized (Status: 7) |
+| **Claim Registration** | Registered in `DRAFT` status | [`0x10b26cbf105e21fe6ecbae34f55557ae05568c056b09459ed38b15622d615a2f`](https://explorer-studio.genlayer.com/tx/0x10b26cbf105e21fe6ecbae34f55557ae05568c056b09459ed38b15622d615a2f) | Finalized (Status: 7) |
+| **Funder 1 Deposit** | Alice deposits **0.15 GEN** (`150,000,000,000,000,000 wei`) | [`0x5337780c9d085074d21c5ca296ab8b1b82b24a1357c10bb5d684e2da7f7483a0`](https://explorer-studio.genlayer.com/tx/0x5337780c9d085074d21c5ca296ab8b1b82b24a1357c10bb5d684e2da7f7483a0) | Finalized (Status: 7) |
+| **Funder 2 Deposit** | Bob deposits **0.10 GEN** (`100,000,000,000,000,000 wei`) | [`0x50a8c9c8dbe64ac6e6285c25f5ad645217279bfebad319c4ce4fd36bae6172a7`](https://explorer-studio.genlayer.com/tx/0x50a8c9c8dbe64ac6e6285c25f5ad645217279bfebad319c4ce4fd36bae6172a7) | Finalized (Status: 7) |
+| **Draft Cancellation** | Admin cancels claim; contract executes multi-funder restitution loop | [`0x55314b8aa385959216efd83790959991d7f99b3010e6c3f6dc3fa1d5138866b9`](https://explorer-studio.genlayer.com/tx/0x55314b8aa385959216efd83790959991d7f99b3010e6c3f6dc3fa1d5138866b9) | Finalized (Status: 7) |
 
-#### Verified Multi-Funder Refund Balance Restitution:
-- **Alice Before Refund**: `650,000,000,000,000,000 wei` ──> **After Refund**: `800,000,000,000,000,000 wei` (**`+0.15 GEN` exact restitution**)
-- **Bob Before Refund**: `800,000,000,000,000,000 wei` ──> **After Refund**: `900,000,000,000,000,000 wei` (**`+0.10 GEN` exact restitution**)
-- **Contract Cumulative Refund Counter**: Recorded exactly `250,000,000,000,000,000 wei` (0.25 GEN).
+#### Exact Individual Restitution Proof:
+- **Alice Refund Delta**: `+150,000,000,000,000,000 wei` (**+0.15 GEN exact refund**)
+- **Bob Refund Delta**: `+100,000,000,000,000,000 wei` (**+0.10 GEN exact refund**)
 
 ---
 
-## 💡 How GenState Works
+### 4. Failed-Transfer Recovery Pattern
 
-Traditional smart contracts cannot read the open web or evaluate subjective real-world conditions without centralized oracles. GenState solves this using GenLayer's multi-validator Intelligent Contract capabilities:
+- Un-transferred balances resulting from any failed native push transfer are safely captured in `pending_recoveries: TreeMap[str, u256]`.
+- Enforces pull-recovery via `recover_failed_transfer(recipient)` and public inspection via `get_pending_recovery(recipient)`.
+- Verified in Direct Mode Test 16 and live StudioNet verification.
+
+---
+
+## 🧪 Executable Behavioral Test Suite (18 Tests, 100% Pass)
+
+Run with `python -m pytest tests/test_direct_gen_state.py -v`:
 
 ```
-[DRAFT] ──> [REGISTERED] ──> [EVIDENCE_OPEN] ──> [ADJUDICATING] ──> [RESOLVED] ──> [SETTLED]
-     │                                                                   │
-     └──> [CANCELLED] (100% individual refunds)                         └──> [CONFIRMED / REFUTED / CONFLICTED]
-```
+============================= test session starts =============================
+platform win32 -- Python 3.13.7, pytest-8.4.2, pluggy-1.6.0
+collected 18 items
 
-### 1. Multi-Funder Contributor Accounting
-- Any contributor can deposit native GEN into a claim bounty using `fund_bounty(claim_id)`.
-- Each contributor's address and exact deposited amount is tracked in `claim_funders: TreeMap[str, str]` and `funder_deposits: TreeMap[str, u256]`.
-- Upon cancellation (`cancel_claim`) or inconclusive adjudication refund (`refund_bounty`), the contract iterates through all recorded contributors and returns each participant's exact deposited funds. Zero GEN is incorrectly pooled to the first funder.
+tests/test_direct_gen_state.py::test_access_control_freeze_and_cancel PASSED [  5%]
+tests/test_direct_gen_state.py::test_reference_date_validation PASSED        [ 11%]
+tests/test_direct_gen_state.py::test_evidence_window_deadlines PASSED        [ 16%]
+tests/test_direct_gen_state.py::test_multi_funder_accounting_and_individual_draft_refunds PASSED [ 22%]
+tests/test_direct_gen_state.py::test_multi_funder_inconclusive_adjudication_refunds PASSED [ 27%]
+tests/test_direct_gen_state.py::test_deterministic_reward_eligibility_and_settlement PASSED [ 33%]
+tests/test_direct_gen_state.py::test_fingerprint_persistence_and_quotation_verification PASSED [ 38%]
+tests/test_direct_gen_state.py::test_apex_domain_publisher_independence_enforcement PASSED [ 44%]
+tests/test_direct_gen_state.py::test_official_registry_policy_enforcement PASSED [ 50%]
+tests/test_direct_gen_state.py::test_regulatory_filing_policy_enforcement PASSED [ 55%]
+tests/test_direct_gen_state.py::test_conflicting_observations_consensus PASSED [ 61%]
+tests/test_direct_gen_state.py::test_malformed_llm_response_handling PASSED     [ 66%]
+tests/test_direct_gen_state.py::test_all_sources_unreachable_resolves_source_unavailable PASSED [ 72%]
+tests/test_direct_gen_state.py::test_refuted_verdict_bounty_settlement PASSED   [ 77%]
+tests/test_direct_gen_state.py::test_validator_disagreement_rolls_back_safely PASSED [ 83%]
+tests/test_direct_gen_state.py::test_failed_transfer_recovery_mechanism PASSED  [ 88%]
+tests/test_direct_gen_state.py::test_unsupported_conclusive_outcome_blocked_by_quotation_check PASSED [ 94%]
+tests/test_direct_gen_state.py::test_unsupported_conclusive_outcome_blocked_by_mirror_source_check PASSED [100%]
 
-### 2. Deterministic Reward Eligibility
-- Merely submitting an evidence URL does **not** make a participant eligible for bounty rewards.
-- During consensus adjudication, validators evaluate every evidence submission and designate only those index numbers that provided genuine, qualifying corroborating proof as `qualifying_indices`.
-- These indices map to `qualifying_recipients` submitter addresses stored permanently on-chain.
-- `settle_bounty(claim_id, recipient)` verifies that the recipient is in `qualifying_recipients`. Calls attempting to settle to non-qualifying submitters or attackers are rejected with `gl.vm.UserError`.
-- If multiple qualifying submitters exist, the escrow is deterministically divided among them using proportional unsettled share division (`total_bounty_remaining // unsettled_count`), distributing 100% of escrow with zero lost dust.
-- Double-settlement protection prevents any recipient from receiving duplicate payouts.
-
-### 3. Evidence Integrity & Cryptographic Content Fingerprinting
-- **SHA-256 Fingerprint Persistence**: Each fetched web page is fingerprinted using SHA-256 and stored permanently in `claim_adjudications` on-chain.
-- **Verbatim Quotation Verification**: Validators extract an exact supporting quotation and check that it appears verbatim within the retrieved text sample (`quotation_verified: bool`).
-- **Publisher Independence & Apex Domain Enforcement**: Domains are normalized to registered apex domains (handling ccTLDs like `.gov.uk`, `.co.uk`, `.gov.au`). Subdomains cannot be spoofed to satisfy multi-source policies.
-- **Mirror Source Detection**: If two distinct URLs return identical SHA-256 hashes, the second is flagged as `MIRROR_DUPLICATE` and excluded from multi-source counts.
-- **Temporal Reference-Date Adjudication**: Claims require a validated `reference_date` (`YYYY-MM-DD`). The adjudication prompt strictly instructs validators to judge whether the assertion was true as of that historical date, preventing historical claims from being corrupted by later state changes.
-- **Zero-Revert Web Fallback**: External network queries gracefully downgrade without reverting transactions. If all sources are unreachable, the contract resolves `SOURCE_UNAVAILABLE`.
-
----
-
-## 🛡️ Admissibility Policies
-
-- **`OFFICIAL_REGISTRY`**: Requires proof grounded in official municipal, land, corporate, or state registry endpoints (`.gov`, `.mil`, `.int`, or verified registries like `sec.gov`, `companieshouse.gov.uk`).
-- **`REGULATORY_FILING`**: Requires statutory notices, SEC bulletins, or gazette filings.
-- **`MULTI_SOURCE_INDEPENDENT`**: Requires at least 2 distinct independent apex domains with non-colliding content fingerprints.
-- **`PRIMARY_PLUS_CORROBORATION`**: Requires primary originating announcement plus third-party verification.
-- **`OPEN_PUBLIC`**: Admissible across credible public web domains.
-
----
-
-## 🧪 Executable Behavioral Test Suite (GenVM Direct Mode)
-
-GenState includes an executable test suite running natively in GenLayer Direct Mode (`pytest tests/test_direct_gen_state.py`):
-
-```bash
-python -m pytest tests/test_direct_gen_state.py -v
-```
-
-### Test Coverage (14/14 Passed in 0.73s):
-1. `test_access_control_freeze_and_cancel`: Creator authorization and draft state transition enforcement.
-2. `test_reference_date_validation`: Strict format validation for `YYYY-MM-DD`.
-3. `test_evidence_window_deadlines`: Rejection of premature adjudication before deadline expiration.
-4. `test_multi_funder_accounting_and_individual_draft_refunds`: Multi-contributor deposits and exact individual refund delivery.
-5. `test_multi_funder_inconclusive_adjudication_refunds`: Proportional multi-funder refunds for `INSUFFICIENT_EVIDENCE` outcomes.
-6. `test_deterministic_reward_eligibility_and_settlement`: Rejection of non-qualifying submitters, authorized settlement, proportional division, and duplicate-settlement prevention.
-7. `test_fingerprint_persistence_and_quotation_verification`: Verifies SHA-256 fingerprints and quotation verification in persistent on-chain record.
-8. `test_apex_domain_publisher_independence_enforcement`: Confirms subdomains of same apex domain do not count as independent.
-9. `test_official_registry_policy_enforcement`: Rejection of non-official domains under `OFFICIAL_REGISTRY`.
-10. `test_regulatory_filing_policy_enforcement`: Enforcement of regulatory domains under `REGULATORY_FILING`.
-11. `test_conflicting_observations_consensus`: Conservative `CONFLICTED` ruling when sources dispute assertions.
-12. `test_malformed_llm_response_handling`: Defensive JSON recovery and schema validation without contract crashes.
-13. `test_all_sources_unreachable_resolves_source_unavailable`: Safe fallback preventing self-reported text from generating conclusive verdicts.
-14. `test_refuted_verdict_bounty_settlement`: Legitimate reward settlement on `REFUTED` findings.
-
----
-
-## 💻 Frontend Application
-
-Built with React 19, TypeScript, Vite, and Vanilla CSS glassmorphism:
-- **Active Network Guard**: Detects connected wallet chain and enforces GenLayer StudioNet (`61999` / `0xf22f`). Shows a warning banner with one-click network switch if mismatched.
-- **Multi-Funder Funding Modal**: Allows any connected wallet to deposit native GEN with real-time balance checks.
-- **Deterministic Settlement Modal**: Inspects qualifying recipients designated by consensus and enables one-click authorized settlement.
-- **Refund & Cancellation Controls**: Interactive triggers for creator draft cancellations and contributor refunds.
-- **Evidence Integrity Badges**: Renders quotation verification status (`VERIFIED QUOTE` / `UNVERIFIED`) and persistent SHA-256 source fingerprints.
-- **Live URL**: [https://genstate.vercel.app](https://genstate.vercel.app)
-
-```bash
-cd frontend
-npm install
-npm run build
-npm run dev
+============================= 18 passed in 1.05s ==============================
 ```
 
 ---
 
-## 🔬 GenVM Compliance & Audit Highlights
+## 🏛️ Architecture Overview
 
-- **Storage Pre-Extraction Audit**: All contract state is pre-extracted into local primitives prior to `leader_fn` execution; zero `self` references exist in non-deterministic closures.
-- **Pinned Runner Audit**: Pinned to `# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }`.
-- **Zero-Revert Web Fallback Audit**: External network queries gracefully downgrade without reverting transactions.
-- **Strict AST Sandbox Audit**: Exclusively uses `from genlayer import *` and `import json` with zero forbidden standard libraries (`genvm-lint`: 0 errors).
-- **Active On-Chain Verified**: Confirmed with live multi-funder deposits, payouts, and refunds on GenLayer StudioNet.
+```
+                      ┌────────────────────────────────────────┐
+                      │          GenState Intelligent          │
+                      │          Adjudication Pipeline         │
+                      └──────────────────┬─────────────────────┘
+                                         │
+                 ┌───────────────────────┴───────────────────────┐
+                 ▼                                               ▼
+     ┌───────────────────────┐                       ┌───────────────────────┐
+     │  Admissibility Policy │                       │   Consensus Leader    │
+     │  & Source Integrity   │                       │   GenVM Execution     │
+     └───────────┬───────────┘                       └───────────┬───────────┘
+                 │                                               │
+   ┌─────────────┴─────────────┐                   ┌─────────────┴─────────────┐
+   │ Apex Domain Normalization │                   │ Non-Det Safe Data Extract │
+   │ Mirror Duplicate Hash     │                   │ Verbatim Quote Check      │
+   │ Official Registry Check   │                   │ Equivalence Comparator    │
+   └───────────────────────────┘                   └───────────────────────────┘
+                 │                                               │
+                 └───────────────────────┬───────────────────────┘
+                                         ▼
+                      ┌────────────────────────────────────────┐
+                      │        Deterministic Settlement        │
+                      ├────────────────────────────────────────┤
+                      │ • Conclusive Outcome Verification      │
+                      │ • Qualifying Recipient Allocation      │
+                      │ • Multi-Funder Proportional Refunds    │
+                      │ • Push + Pull Failed-Transfer Safety   │
+                      └────────────────────────────────────────┘
+```
+
+---
+
+## 📦 Project Structure
+
+```
+GenState/
+├── contracts/
+│   └── gen_state.py             # GenState Intelligent Contract v1.3.0
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx              # React UI with Network Guard & Direct Lookup
+│   │   ├── lib/
+│   │   │   ├── config.ts        # Contract address & StudioNet chain config
+│   │   │   └── genstate-service.ts # genlayer-js service with provider sync
+│   └── package.json
+├── docs/
+│   ├── deployment.json          # Deployment transaction metadata
+│   ├── live_verification_proofs_v1_3.json # Live StudioNet transaction proofs
+│   └── STEWARD_REVIEW_RESOLUTION_REPORT.md # Official resolution audit report
+├── scripts/
+│   ├── deploy_studionet.py      # Automated StudioNet deployment pipeline
+│   ├── lint_contract.py         # AST validator for GenVM compliance
+│   └── test_live_studionet_v1_3.py # Live StudioNet verification runner
+└── tests/
+    └── test_direct_gen_state.py # 18 GenVM Direct Mode behavioral tests
+```

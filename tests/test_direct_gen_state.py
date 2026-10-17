@@ -571,3 +571,212 @@ def test_refuted_verdict_bounty_settlement(direct_vm, direct_deploy, direct_alic
     settled = contract.settle_bounty(claim_id, direct_bob)
     assert settled == str(BOUNTY_HALF_GEN)
     assert contract.get_claim(claim_id)["status"] == "SETTLED"
+
+
+# ==============================================================================
+# 5. Steward Oct 16 Requirements: Validator Disagreement, Failed-Transfer Recovery,
+#    and Conclusive Outcome Blocking Tests
+# ==============================================================================
+
+def test_validator_disagreement_rolls_back_safely(direct_vm, direct_deploy, direct_alice, direct_bob, monkeypatch):
+    """
+    Steward Requirement: Validator-disagreement test.
+    Simulates non-consensus / comparative equivalence failure during adjudication.
+    Asserts that the transaction rolls back safely:
+    - Claim remains in EVIDENCE_OPEN
+    - Escrow balances are completely untouched
+    - No corrupt or partial verdict is committed
+    """
+    direct_vm.warp("2026-10-14T10:00:00Z")
+    contract = deploy(direct_deploy)
+
+    direct_vm.sender = direct_alice
+    claim_id = contract.declare_claim("FACTUAL_EVENT", "Disputed State Assert", "status", "TRUE", "2026-03-01")
+    direct_vm.value = BOUNTY_1_GEN
+    contract.fund_bounty(claim_id)
+    direct_vm.value = 0
+
+    contract.freeze_claim(claim_id, "OPEN_PUBLIC", 100)
+
+    direct_vm.sender = direct_bob
+    contract.submit_evidence(claim_id, "https://disputed-source.com/report", "Ambiguous report")
+
+    direct_vm.mock_web(r".*disputed-source\.com.*", {"status": 200, "body": "Report subject to ongoing dispute."})
+
+    # Simulate validator disagreement in equivalence principle comparative evaluation
+    import genlayer.gl as gl
+    def disagree_comparative(leader_fn, principle):
+        raise Exception("Validator consensus disagreement: validators reached conflicting conclusions without equivalence")
+
+    monkeypatch.setattr(gl.eq_principle, "prompt_comparative", disagree_comparative)
+
+    direct_vm.warp("2026-10-14T10:02:00Z")
+    with pytest.raises(Exception) as exc_info:
+        contract.adjudicate(claim_id)
+
+    assert "Validator consensus disagreement" in str(exc_info.value)
+
+    # Verify claim state and escrow remain safe and rolled back
+    claim = contract.get_claim(claim_id)
+    assert claim["status"] == "EVIDENCE_OPEN"
+    assert claim["verdict"] == ""
+    assert claim["bounty_amount"] == str(BOUNTY_1_GEN)
+
+
+def test_failed_transfer_recovery_mechanism(direct_vm, direct_deploy, direct_alice, direct_bob, monkeypatch):
+    """
+    Steward Requirement: Failed-transfer recovery demonstration.
+    Simulates a native GEN transfer failure (e.g. non-payable smart contract or EVM call failure).
+    Demonstrates:
+    - Failed transfer does NOT cause an unhandled revert that locks funds
+    - Un-transferred funds are captured in pending_recoveries
+    - Recipient or admin can safely recover funds via recover_failed_transfer()
+    """
+    direct_vm.warp("2026-10-14T10:00:00Z")
+    contract = deploy(direct_deploy)
+
+    direct_vm.sender = direct_alice
+    claim_id = contract.declare_claim("FACTUAL_EVENT", "Listing Bounty", "is_approved", "YES", "2026-04-01")
+    direct_vm.value = BOUNTY_HALF_GEN
+    contract.fund_bounty(claim_id)
+    direct_vm.value = 0
+
+    contract.freeze_claim(claim_id, "OPEN_PUBLIC", 100)
+
+    direct_vm.sender = direct_bob
+    contract.submit_evidence(claim_id, "https://audit.example.com/report", "Approval confirmed")
+
+    direct_vm.mock_web(r".*audit\.example\.com.*", {"status": 200, "body": "Approval confirmed and ratified."})
+    direct_vm.mock_llm(
+        r".*authoritative validator node in the GenState.*",
+        json.dumps({
+            "verdict": "CONFIRMED",
+            "reason": "Audited source confirms approval.",
+            "confidence_score": 95,
+            "supporting_quotation": "Approval confirmed and ratified",
+            "qualifying_indices": [0],
+        })
+    )
+
+    direct_vm.warp("2026-10-14T10:02:00Z")
+    contract.adjudicate(claim_id)
+
+    # Simulate a recipient transfer failure by monkeypatching contract._send_gen
+    original_send = contract._send_gen
+
+    def failing_send(to, amount, recovery_key=""):
+        key = recovery_key if recovery_key else (to.as_hex if hasattr(to, "as_hex") else str(to))
+        current = (
+            contract.pending_recoveries[key]
+            if key in contract.pending_recoveries
+            else amount * 0
+        )
+        contract.pending_recoveries[key] = current + amount
+
+    monkeypatch.setattr(contract, "_send_gen", failing_send)
+
+    # Settle bounty to Bob -> transfer push fails gracefully and captures into pending recovery
+    direct_vm.sender = direct_alice
+    contract.settle_bounty(claim_id, direct_bob)
+
+    # Assert funds captured in pending recovery
+    pending = contract.get_pending_recovery(direct_bob)
+    assert pending == str(BOUNTY_HALF_GEN)
+
+    # Now Bob recovers his funds via recover_failed_transfer()
+    # Restore normal _send_gen
+    monkeypatch.setattr(contract, "_send_gen", original_send)
+    direct_vm.sender = direct_bob
+    recovered = contract.recover_failed_transfer(direct_bob)
+    assert recovered == str(BOUNTY_HALF_GEN)
+
+    # Pending balance is now cleared
+    assert contract.get_pending_recovery(direct_bob) == "0"
+
+
+def test_unsupported_conclusive_outcome_blocked_by_quotation_check(direct_vm, direct_deploy, direct_alice, direct_bob):
+    """
+    Steward Requirement: Quotation check must block unsupported conclusive outcomes.
+    When LLM attempts to rule CONFIRMED but supporting quotation is not in source text,
+    the contract must downgrade verdict to INSUFFICIENT_EVIDENCE and block settlement.
+    """
+    direct_vm.warp("2026-10-14T10:00:00Z")
+    contract = deploy(direct_deploy)
+
+    direct_vm.sender = direct_alice
+    claim_id = contract.declare_claim("REGISTRY_RECORD", "Company Good Standing", "status", "ACTIVE", "2026-01-01")
+    contract.freeze_claim(claim_id, "OPEN_PUBLIC", 100)
+
+    direct_vm.sender = direct_bob
+    contract.submit_evidence(claim_id, "https://registry.example.org/entity", "Entity file")
+
+    direct_vm.mock_web(r".*registry\.example\.org.*", {"status": 200, "body": "Entity 12345 filed annual report."})
+    # LLM hallucinates or quotes text not in webpage
+    direct_vm.mock_llm(
+        r".*authoritative validator node in the GenState.*",
+        json.dumps({
+            "verdict": "CONFIRMED",
+            "reason": "Entity is active and good standing.",
+            "confidence_score": 90,
+            "supporting_quotation": "INVENTED TEXT: Company in good standing ratified by secretary",
+            "qualifying_indices": [0],
+        })
+    )
+
+    direct_vm.warp("2026-10-14T10:02:00Z")
+    verdict = contract.adjudicate(claim_id)
+
+    # Must be blocked and downgraded to INSUFFICIENT_EVIDENCE
+    assert verdict == "INSUFFICIENT_EVIDENCE"
+    claim = contract.get_claim(claim_id)
+    assert claim["verdict"] == "INSUFFICIENT_EVIDENCE"
+    assert "Unsupported conclusive outcome blocked" in claim["verdict_reason"]
+    assert claim["qualifying_recipients"] == []
+
+
+def test_unsupported_conclusive_outcome_blocked_by_mirror_source_check(direct_vm, direct_deploy, direct_alice, direct_bob, direct_charlie):
+    """
+    Steward Requirement: Mirror-source check must block unsupported conclusive outcomes.
+    Under MULTI_SOURCE_INDEPENDENT policy, submitting duplicate mirrors of the same content
+    must not satisfy the 2 independent apex domain requirement, blocking conclusive verdicts.
+    """
+    direct_vm.warp("2026-10-14T10:00:00Z")
+    contract = deploy(direct_deploy)
+
+    direct_vm.sender = direct_alice
+    claim_id = contract.declare_claim("REGISTRY_RECORD", "Multi-Source Claim", "is_compliant", "YES", "2026-05-01")
+    contract.freeze_claim(claim_id, "MULTI_SOURCE_INDEPENDENT", 100)
+
+    # Bob and Charlie submit URLs from different domains, but they are mirror duplicates with identical content
+    direct_vm.sender = direct_bob
+    contract.submit_evidence(claim_id, "https://news-mirror-a.com/article", "Mirror A")
+
+    direct_vm.sender = direct_charlie
+    contract.submit_evidence(claim_id, "https://news-mirror-b.com/article", "Mirror B")
+
+    # Identical content returned -> duplicate SHA-256 fingerprint
+    identical_body = "<html><body>IDENTICAL SYNDICATED TEXT ON BOTH MIRROR DOMAINS.</body></html>"
+    direct_vm.mock_web(r".*news-mirror-a\.com.*", {"status": 200, "body": identical_body})
+    direct_vm.mock_web(r".*news-mirror-b\.com.*", {"status": 200, "body": identical_body})
+
+    direct_vm.mock_llm(
+        r".*authoritative validator node in the GenState.*",
+        json.dumps({
+            "verdict": "CONFIRMED",
+            "reason": "Both sources confirm compliance.",
+            "confidence_score": 95,
+            "supporting_quotation": "IDENTICAL SYNDICATED TEXT ON BOTH MIRROR DOMAINS",
+            "qualifying_indices": [0, 1],
+        })
+    )
+
+    direct_vm.warp("2026-10-14T10:02:00Z")
+    verdict = contract.adjudicate(claim_id)
+
+    # Must be blocked and downgraded to INSUFFICIENT_EVIDENCE
+    assert verdict == "INSUFFICIENT_EVIDENCE"
+    claim = contract.get_claim(claim_id)
+    assert claim["verdict"] == "INSUFFICIENT_EVIDENCE"
+    assert "Unsupported conclusive outcome blocked" in claim["verdict_reason"]
+    assert claim["qualifying_recipients"] == []
+

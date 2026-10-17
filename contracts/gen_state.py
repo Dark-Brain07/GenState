@@ -14,7 +14,7 @@ import hashlib
 # multi-validator LLM consensus to establish verifiable on-chain truth.
 # ==============================================================================
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 # Supported claim domain categories
 CLAIM_TYPES = [
@@ -26,12 +26,18 @@ CLAIM_TYPES = [
 ]
 
 # Source admissibility policies
+POLICY_OFFICIAL_REGISTRY = "OFFICIAL_REGISTRY"
+POLICY_REGULATORY_FILING = "REGULATORY_FILING"
+POLICY_MULTI_SOURCE = "MULTI_SOURCE_INDEPENDENT"
+POLICY_PRIMARY_CORROB = "PRIMARY_PLUS_CORROBORATION"
+POLICY_OPEN = "OPEN_PUBLIC"
+
 POLICIES = [
-    "OFFICIAL_REGISTRY",
-    "REGULATORY_FILING",
-    "MULTI_SOURCE_INDEPENDENT",
-    "PRIMARY_PLUS_CORROBORATION",
-    "OPEN_PUBLIC",
+    POLICY_OFFICIAL_REGISTRY,
+    POLICY_REGULATORY_FILING,
+    POLICY_MULTI_SOURCE,
+    POLICY_PRIMARY_CORROB,
+    POLICY_OPEN,
 ]
 
 # Claim state lifecycle
@@ -184,6 +190,8 @@ class GenState(gl.Contract):
     claim_funders: TreeMap[str, str]
     funder_deposits: TreeMap[str, u256]
     recipient_settled: TreeMap[str, u256]
+    # v1.3.0: Failed-transfer recovery pull pattern
+    pending_recoveries: TreeMap[str, u256]
 
     def __init__(self):
         self.admin = gl.message.sender_address
@@ -207,14 +215,25 @@ class GenState(gl.Contract):
             pass
         return 0
 
-    def _send_gen(self, to: Address, amount: u256):
-        """Executes native GEN movement to an EVM recipient."""
+    def _send_gen(self, to: Address, amount: u256, recovery_key: str = ""):
+        """
+        Executes native GEN movement to an EVM recipient.
+        If transfer fails (e.g. non-payable contract or execution fault), safely deposits
+        the amount into pending_recoveries so funds are never locked or lost.
+        """
         if amount > u256(0):
             try:
                 target = to if isinstance(to, Address) else Address(to)
+                _Recipient(target).emit_transfer(value=amount)
             except Exception:
-                target = Address(_addr_str(to))
-            _Recipient(target).emit_transfer(value=amount)
+                # Capture un-transferred funds into pending_recoveries for pull recovery
+                key = recovery_key if recovery_key else _addr_str(to)
+                current = (
+                    self.pending_recoveries[key]
+                    if key in self.pending_recoveries
+                    else u256(0)
+                )
+                self.pending_recoveries[key] = current + amount
 
     def _require_admin(self):
         if gl.message.sender_address != self.admin:
@@ -712,14 +731,46 @@ You MUST respond strictly with a valid JSON object matching this schema:
             if isinstance(raw_indices, list) and v in [VERDICT_CONFIRMED, VERDICT_REFUTED]:
                 for idx in raw_indices:
                     if isinstance(idx, int) and 0 <= idx < len(frozen_evidence):
-                        # Must have been successfully fetched
+                        # Must have been successfully fetched and not a duplicate mirror
                         if evidence_summaries[idx]["fetch_status"] == "FETCH_SUCCESS":
                             if idx not in valid_qualifying:
                                 valid_qualifying.append(idx)
 
+            # 5. Strict Enforcement: Block Unsupported Conclusive Outcomes
+            final_reason = str(parsed.get("reason", "Adjudication finalized")).strip()[:400]
+            if v in [VERDICT_CONFIRMED, VERDICT_REFUTED]:
+                # 5a. Block if supporting quotation could not be verified verbatim in fetched source text
+                if not quote_verified:
+                    v = VERDICT_INSUFFICIENT
+                    final_reason = "Unsupported conclusive outcome blocked: supporting quotation could not be verified verbatim in fetched source text."
+                    valid_qualifying = []
+
+                # 5b. Block if MULTI_SOURCE_INDEPENDENT policy is violated by mirror duplicates or insufficient domains
+                elif frozen_policy == POLICY_MULTI_SOURCE:
+                    unique_non_mirror_apex = set()
+                    for fp in fingerprint_records:
+                        if fp["fetch_status"] == "FETCH_SUCCESS":
+                            unique_non_mirror_apex.add(fp["apex_domain"])
+                    if len(unique_non_mirror_apex) < 2:
+                        v = VERDICT_INSUFFICIENT
+                        final_reason = f"Unsupported conclusive outcome blocked: MULTI_SOURCE_INDEPENDENT policy requires at least 2 independent non-mirror apex domains (found {len(unique_non_mirror_apex)})."
+                        valid_qualifying = []
+
+                # 5c. Block if all successful sources are duplicate mirrors
+                else:
+                    successful_fps = [
+                        fp["sha256_fingerprint"]
+                        for fp in fingerprint_records
+                        if fp["fetch_status"] in ["FETCH_SUCCESS", "MIRROR_DUPLICATE"]
+                    ]
+                    if len(successful_fps) > 1 and len(set(successful_fps)) <= 1:
+                        v = VERDICT_INSUFFICIENT
+                        final_reason = "Unsupported conclusive outcome blocked: all submitted sources are duplicate mirrors of identical content."
+                        valid_qualifying = []
+
             clean_result = {
                 "verdict": v,
-                "reason": str(parsed.get("reason", "Adjudication finalized")).strip()[:400],
+                "reason": final_reason,
                 "confidence_score": int(parsed.get("confidence_score", 75)),
                 "supporting_quotation": sq,
                 "quotation_verified": quote_verified,
@@ -742,6 +793,32 @@ You MUST respond strictly with a valid JSON object matching this schema:
         quote_verified = bool(ruling.get("quotation_verified", False))
         source_fps = ruling.get("source_fingerprints", [])
         qualifying_indices = ruling.get("qualifying_indices", [])
+
+        # Defense-in-depth: Deterministically block unsupported conclusive outcomes on contract state level
+        if verdict in [VERDICT_CONFIRMED, VERDICT_REFUTED]:
+            if not quote_verified:
+                verdict = VERDICT_INSUFFICIENT
+                reason = "Unsupported conclusive outcome blocked: supporting quotation could not be verified verbatim in fetched source text."
+                qualifying_indices = []
+            elif policy == POLICY_MULTI_SOURCE:
+                unique_non_mirror_apex = set()
+                for fp in source_fps:
+                    if fp.get("fetch_status") == "FETCH_SUCCESS":
+                        unique_non_mirror_apex.add(fp.get("apex_domain", ""))
+                if len(unique_non_mirror_apex) < 2:
+                    verdict = VERDICT_INSUFFICIENT
+                    reason = f"Unsupported conclusive outcome blocked: MULTI_SOURCE_INDEPENDENT policy requires at least 2 independent non-mirror apex domains (found {len(unique_non_mirror_apex)})."
+                    qualifying_indices = []
+            else:
+                successful_fps = [
+                    fp.get("sha256_fingerprint")
+                    for fp in source_fps
+                    if fp.get("fetch_status") in ["FETCH_SUCCESS", "MIRROR_DUPLICATE"]
+                ]
+                if len(successful_fps) > 1 and len(set(successful_fps)) <= 1:
+                    verdict = VERDICT_INSUFFICIENT
+                    reason = "Unsupported conclusive outcome blocked: all submitted sources are duplicate mirrors of identical content."
+                    qualifying_indices = []
 
         # Map qualifying indices to submitter addresses
         qualifying_submitters = []
@@ -863,7 +940,7 @@ You MUST respond strictly with a valid JSON object matching this schema:
         self._save_claim_dict(claim_id, claim)
 
         # Interactions: Execute native GEN movement
-        self._send_gen(recipient, payout_share)
+        self._send_gen(recipient, payout_share, recovery_key=recip_str)
 
         return str(payout_share)
 
@@ -892,7 +969,7 @@ You MUST respond strictly with a valid JSON object matching this schema:
             if dep_val > u256(0):
                 self.funder_deposits[dep_key] = u256(0)
                 total_refunded_here = total_refunded_here + dep_val
-                self._send_gen(Address(f), dep_val)
+                self._send_gen(Address(f), dep_val, recovery_key=f)
 
         if total_refunded_here > u256(0):
             self.bounties[claim_id] = u256(0)
@@ -956,7 +1033,7 @@ You MUST respond strictly with a valid JSON object matching this schema:
             if dep_val > u256(0):
                 self.funder_deposits[dep_key] = u256(0)
                 total_refunded_here = total_refunded_here + dep_val
-                self._send_gen(Address(f), dep_val)
+                self._send_gen(Address(f), dep_val, recovery_key=f)
 
         if total_refunded_here == u256(0):
             raise gl.vm.UserError("No remaining contributor balances to refund")
@@ -970,6 +1047,35 @@ You MUST respond strictly with a valid JSON object matching this schema:
         self._save_claim_dict(claim_id, claim)
 
         return str(total_refunded_here)
+
+    @gl.public.write
+    def recover_failed_transfer(self, recipient: Address) -> str:
+        """
+        Pull-pattern recovery for un-transferred funds resulting from a failed transfer.
+        Enforces caller authorization: caller must be recipient or protocol admin.
+        """
+        recip_str = _addr_str(recipient)
+        caller_str = _addr_str(gl.message.sender_address)
+        admin_str = _addr_str(self.admin)
+        if caller_str != recip_str and caller_str != admin_str:
+            raise gl.vm.UserError("Only the recipient or protocol admin can recover failed transfers")
+
+        pending = (
+            self.pending_recoveries[recip_str]
+            if recip_str in self.pending_recoveries
+            else u256(0)
+        )
+        if pending == u256(0):
+            raise gl.vm.UserError("No pending recoverable funds for this recipient")
+
+        # Checks-Effects: Clear pending balance first
+        self.pending_recoveries[recip_str] = u256(0)
+
+        # Interactions: Execute native transfer directly
+        target = recipient if isinstance(recipient, Address) else Address(recip_str)
+        _Recipient(target).emit_transfer(value=pending)
+
+        return str(pending)
 
     # --------------------------------------------------------------------------
     # Public Read / View Methods
@@ -1055,3 +1161,15 @@ You MUST respond strictly with a valid JSON object matching this schema:
                 "qualifying_recipients": [],
             }
         return json.loads(self.claim_adjudications[claim_id])
+
+    @gl.public.view
+    def get_pending_recovery(self, recipient: Address) -> str:
+        """Returns pending recoverable balance for an address in wei."""
+        recip_str = _addr_str(recipient)
+        pending = (
+            self.pending_recoveries[recip_str]
+            if recip_str in self.pending_recoveries
+            else u256(0)
+        )
+        return str(pending)
+

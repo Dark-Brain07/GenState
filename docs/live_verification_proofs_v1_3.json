@@ -1,0 +1,85 @@
+{
+  "contract_address": "0xeD9b8ef621c57d8eeFBF45124D1535f5874A4be6",
+  "chain_id": 61999,
+  "version": "1.3.0",
+  "transactions": {
+    "declare_claim_1": "0x8e206f673d4da22008a2df8efa59465569cd8e3ccbb4d5e0e44316501eaebe1d",
+    "fund_bounty_alice": "0x707ca0f4d1d22e50b5eb09931337efa37ada52d498fcef07835c13a83e969e78",
+    "fund_bounty_bob": "0x189e0e7ac428ac62e67a21527fd46b3b54d1736f2303fc8a8e7949fabc349c5a",
+    "freeze_claim_1": "0x6d40ed781f05786b3689f2f27bf6b64ccb223b6af456a818875720dc42f69961",
+    "submit_evidence_charlie": "0x845f3f187dc4268fec625c0c7768c84cdc112042e847af21d39b999272b60852",
+    "adjudicate_claim_1": "0xd8c2f4506dcf2608d0fe0476d98118d4111ad163278f849f00bd0a890b9f0f9e",
+    "settle_bounty_charlie": "0x4012d1f3d18626aa61278e06bc1094cdb3dfa816c3d90d7e1a0c0904d5e25f7b",
+    "declare_claim_2": "0x38d8fecb06a1c69dfb42b62464fcd3942443202521ff732f9ab6d5b0d8998b39",
+    "freeze_claim_2": "0xc33e7e5d15ba15449ea2c51f444e62a242e441eb89c7845fea4e5a9ce3cc3703",
+    "submit_evidence_fabricated": "0x80192981ce02262a58703ea12231edeb91a3a0db1b51bb2f80caa5bc55784681",
+    "adjudicate_claim_2": "0x082b8354d8ec7e54d946f2b3e938e6220fddc9b313c21e35e0cdd254fda2f663",
+    "declare_claim_3": "0x10b26cbf105e21fe6ecbae34f55557ae05568c056b09459ed38b15622d615a2f",
+    "fund_claim_3_alice": "0x5337780c9d085074d21c5ca296ab8b1b82b24a1357c10bb5d684e2da7f7483a0",
+    "fund_claim_3_bob": "0x50a8c9c8dbe64ac6e6285c25f5ad645217279bfebad319c4ce4fd36bae6172a7",
+    "cancel_claim_3": "0x55314b8aa385959216efd83790959991d7f99b3010e6c3f6dc3fa1d5138866b9"
+  },
+  "balance_proofs": {
+    "settlement_payout_charlie": {
+      "recipient": "0x142a27E240709489F9BCf3cD12A2c10F5049a91e",
+      "pre_balance": "100000000000000000",
+      "post_balance": "400000000000000000",
+      "increase": "300000000000000000"
+    },
+    "cancellation_refunds": {
+      "alice_refund": "150000000000000000",
+      "bob_refund": "100000000000000000"
+    }
+  },
+  "steward_verifications": {
+    "claim_1_adjudication": {
+      "adjudicated_at": "1792210402",
+      "claim_id": "CLAIM-1",
+      "confidence_score": 100,
+      "evidence_count": 1,
+      "qualifying_recipients": [
+        "0x142a27e240709489f9bcf3cd12a2c10f5049a91e"
+      ],
+      "quotation_verified": true,
+      "reason": "The evidence from index 0 explicitly states that the domain is intended for use in documentation examples. This aligns perfectly with the asserted value regarding the reservation purpose for illustrative examples in documents. As of the 2026-01-01 reference date, this long-standing RFC reservation remains the standard purpose for this domain.",
+      "source_fingerprints": [
+        {
+          "apex_domain": "example.com",
+          "domain": "example.com",
+          "evidence_id": "EVID-1",
+          "fetch_status": "FETCH_SUCCESS",
+          "sha256_fingerprint": "25ddf2c883e0d1958ea971d279a7e4f0fd446724ee3db7db19dadabd4a62e484",
+          "url": "https://example.com"
+        }
+      ],
+      "supporting_quotation": "This domain is for use in documentation examples without needing permission.",
+      "verdict": "CONFIRMED"
+    },
+    "claim_2_unsupported_conclusive_blocked": {
+      "adjudicated_at": "1792210688",
+      "claim_id": "CLAIM-2",
+      "confidence_score": 98,
+      "evidence_count": 1,
+      "qualifying_recipients": [],
+      "quotation_verified": true,
+      "reason": "The only provided source is example.com, a generic placeholder page. Its content contains no mention of the claimed subject or the asserted value \"fabricated quote test,\" and it provides no factual basis to verify the assertion as of 2026-02-01 under OPEN_PUBLIC standards.",
+      "source_fingerprints": [
+        {
+          "apex_domain": "example.com",
+          "domain": "example.com",
+          "evidence_id": "EVID-2",
+          "fetch_status": "FETCH_SUCCESS",
+          "sha256_fingerprint": "25ddf2c883e0d1958ea971d279a7e4f0fd446724ee3db7db19dadabd4a62e484",
+          "url": "https://example.com"
+        }
+      ],
+      "supporting_quotation": "This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.",
+      "verdict": "INSUFFICIENT_EVIDENCE"
+    },
+    "pending_recoveries_query": {
+      "alice": "0",
+      "bob": "0",
+      "charlie": "0"
+    }
+  }
+}

@@ -92,6 +92,10 @@ export function App() {
   const [isRefunding, setIsRefunding] = useState<boolean>(false);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
 
+  // Failed-Transfer Recovery State (v1.3.0)
+  const [pendingRecoveryWei, setPendingRecoveryWei] = useState<string>('0');
+  const [isRecovering, setIsRecovering] = useState<boolean>(false);
+
   // Load Real Data from StudioNet
   const loadBlockchainData = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -103,6 +107,8 @@ export function App() {
         const bal = await genStateService.ensureBalance();
         setWalletBalance(bal);
         setWalletConnected(true);
+        const pending = await genStateService.getPendingRecovery(addr);
+        setPendingRecoveryWei(pending);
       }
 
       const [protocolStats, claimsList] = await Promise.all([
@@ -199,13 +205,16 @@ export function App() {
     checkNetwork();
 
     const handleAccountsChanged = async (accounts: string[]) => {
-      if (accounts.length === 0) {
+      if (!accounts || accounts.length === 0) {
         handleDisconnect();
-      } else if (walletConnected && genStateService.getConnectedType() === 'browser') {
-        setWalletAddress(accounts[0]);
-        const bal = await genStateService.ensureBalance();
+      } else {
+        const newAddr = accounts[0];
+        setWalletAddress(newAddr);
+        setWalletConnected(true);
+        const bal = await genStateService.setBrowserAccount(newAddr);
         setWalletBalance(bal);
         await checkNetwork();
+        await loadBlockchainData(true);
       }
     };
 
@@ -214,6 +223,7 @@ export function App() {
       if (walletConnected) {
         const bal = await genStateService.ensureBalance();
         setWalletBalance(bal);
+        await loadBlockchainData(true);
       }
     };
 
@@ -226,9 +236,33 @@ export function App() {
     };
   }, [walletConnected]);
 
+  // Real On-Chain Failed Transfer Recovery Handler (v1.3.0)
+  const handleRecoverFunds = async () => {
+    if (isWrongNetwork) {
+      alert("Please switch your wallet network to GenLayer StudioNet before submitting transactions.");
+      await genStateService.switchOrAddStudioNet();
+      return;
+    }
+    setIsRecovering(true);
+    try {
+      const res = await genStateService.recoverFailedTransfer();
+      alert(`Recovery transaction successful! Recovered un-transferred funds.\nTx Hash: ${res.txHash}`);
+      await loadBlockchainData(true);
+    } catch (err: any) {
+      alert(`Recovery error: ${err.message || err}`);
+    } finally {
+      setIsRecovering(false);
+    }
+  };
+
   // Real On-Chain Fund Bounty Handler
   const handleFundBountySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isWrongNetwork) {
+      alert("Please switch to GenLayer StudioNet (Chain ID 61999) before submitting transactions.");
+      await genStateService.switchOrAddStudioNet();
+      return;
+    }
     if (!selectedClaimId || !fundAmountGen || parseFloat(fundAmountGen) <= 0) return;
 
     setIsFunding(true);
@@ -248,6 +282,11 @@ export function App() {
   // Real On-Chain Settle Bounty Handler
   const handleSettleBountySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isWrongNetwork) {
+      alert("Please switch to GenLayer StudioNet (Chain ID 61999) before submitting transactions.");
+      await genStateService.switchOrAddStudioNet();
+      return;
+    }
     if (!selectedClaimId || !selectedRecipient) return;
 
     setIsSettling(true);
@@ -265,6 +304,11 @@ export function App() {
 
   // Real On-Chain Refund Bounty Handler
   const handleRefundBounty = async (claimId: string) => {
+    if (isWrongNetwork) {
+      alert("Please switch to GenLayer StudioNet (Chain ID 61999) before submitting transactions.");
+      await genStateService.switchOrAddStudioNet();
+      return;
+    }
     if (!confirm("Are you sure you want to refund this claim's escrowed bounty to contributors?")) return;
 
     setIsRefunding(true);
@@ -281,6 +325,11 @@ export function App() {
 
   // Real On-Chain Cancel Claim Handler
   const handleCancelClaim = async (claimId: string) => {
+    if (isWrongNetwork) {
+      alert("Please switch to GenLayer StudioNet (Chain ID 61999) before submitting transactions.");
+      await genStateService.switchOrAddStudioNet();
+      return;
+    }
     if (!confirm("Are you sure you want to cancel this DRAFT claim? Deposited GEN will be automatically refunded.")) return;
 
     setIsCancelling(true);
@@ -298,6 +347,11 @@ export function App() {
   // Real On-Chain Declare Handler
   const handleDeclareSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isWrongNetwork) {
+      alert("Please switch to GenLayer StudioNet (Chain ID 61999) before submitting transactions.");
+      await genStateService.switchOrAddStudioNet();
+      return;
+    }
     if (!newSubject || !newPredicate || !newAssertedValue) return;
 
     setIsDeclaring(true);
@@ -322,6 +376,9 @@ export function App() {
       setNewAssertedValue('');
       await loadBlockchainData(true);
       setSelectedClaimId(res.claimId);
+      setTargetClaimId(res.claimId);
+      setAdjClaimId(res.claimId);
+      alert(`Claim ${res.claimId} successfully registered on GenLayer StudioNet!\nTx Hash: ${res.txHash}`);
     } catch (err: any) {
       alert(`On-chain transaction error: ${err.message || err}`);
     } finally {
@@ -332,6 +389,11 @@ export function App() {
   // Real On-Chain Submit Evidence Handler
   const handleEvidenceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isWrongNetwork) {
+      alert("Please switch to GenLayer StudioNet (Chain ID 61999) before submitting transactions.");
+      await genStateService.switchOrAddStudioNet();
+      return;
+    }
     if (!sourceUrl || !explanation || !targetClaimId) return;
 
     setIsSubmittingEvidence(true);
@@ -356,6 +418,11 @@ export function App() {
 
   // Real On-Chain Run Adjudication Handler
   const handleRunAdjudication = async (claimId: string) => {
+    if (isWrongNetwork) {
+      alert("Please switch to GenLayer StudioNet (Chain ID 61999) before submitting transactions.");
+      await genStateService.switchOrAddStudioNet();
+      return;
+    }
     setIsAdjudicating(true);
     setAdjudicationSuccess(null);
 
@@ -506,6 +573,46 @@ export function App() {
               onClick={() => genStateService.switchOrAddStudioNet()}
             >
               Switch to StudioNet
+            </button>
+          </div>
+        )}
+
+        {/* Failed-Transfer Recovery Banner (v1.3.0) */}
+        {BigInt(pendingRecoveryWei || '0') > 0n && (
+          <div
+            style={{
+              background: 'rgba(234, 179, 8, 0.15)',
+              border: '1px solid #eab308',
+              borderRadius: '8px',
+              padding: '12px 18px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Coins size={20} color="#facc15" />
+              <span style={{ fontSize: '13px', color: '#fef08a' }}>
+                <strong>Pending Recoverable Balance:</strong> You have{' '}
+                <strong>{(Number(pendingRecoveryWei) / 1e18).toFixed(4)} GEN</strong> in failed-transfer escrow. Click below to pull and recover your funds.
+              </span>
+            </div>
+            <button
+              id="btn-recover-funds"
+              className="btn-primary"
+              disabled={isRecovering || isWrongNetwork}
+              style={{
+                padding: '6px 14px',
+                fontSize: '12px',
+                background: '#ca8a04',
+                borderColor: '#eab308',
+                whiteSpace: 'nowrap',
+              }}
+              onClick={handleRecoverFunds}
+            >
+              {isRecovering ? 'Recovering...' : 'Claim Recoverable GEN'}
             </button>
           </div>
         )}
@@ -778,7 +885,7 @@ export function App() {
                         className="btn-secondary"
                         style={{ padding: '4px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
                         onClick={() => setShowFundModal(true)}
-                        disabled={['SETTLED', 'CANCELLED', 'REFUNDED'].includes(selectedClaim.status)}
+                        disabled={['SETTLED', 'CANCELLED', 'REFUNDED'].includes(selectedClaim.status) || isWrongNetwork}
                       >
                         <Coins size={12} color="#fbbf24" /> Fund Bounty
                       </button>
@@ -941,6 +1048,7 @@ export function App() {
                       BigInt(selectedClaim.bounty_amount || '0') > 0n && (
                         <button
                           className="btn-primary"
+                          disabled={isSettling || isWrongNetwork}
                           style={{ width: '100%', padding: '10px 14px', fontSize: '13px', background: '#059669', borderColor: '#10b981' }}
                           onClick={() => {
                             const recipients = selectedClaim.qualifying_recipients || selectedAdjudication?.qualifying_recipients || [];
@@ -960,7 +1068,7 @@ export function App() {
                           className="btn-secondary"
                           style={{ width: '100%', padding: '10px 14px', fontSize: '13px', color: '#f59e0b', borderColor: '#f59e0b' }}
                           onClick={() => handleRefundBounty(selectedClaim.id)}
-                          disabled={isRefunding}
+                          disabled={isRefunding || isWrongNetwork}
                         >
                           {isRefunding ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
                           <span>Refund Escrowed Bounty to Contributors</span>
@@ -973,7 +1081,7 @@ export function App() {
                         className="btn-secondary"
                         style={{ width: '100%', padding: '10px 14px', fontSize: '13px', color: '#ef4444', borderColor: '#ef4444' }}
                         onClick={() => handleCancelClaim(selectedClaim.id)}
-                        disabled={isCancelling}
+                        disabled={isCancelling || isWrongNetwork}
                       >
                         {isCancelling ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
                         <span>Cancel Claim & Auto-Refund Deposited GEN</span>
@@ -1152,7 +1260,7 @@ export function App() {
                 <button
                   id="btn-broadcast-declare"
                   type="submit"
-                  disabled={isDeclaring}
+                  disabled={isDeclaring || isWrongNetwork}
                   className="btn-primary"
                   style={{ width: '100%', marginTop: '12px' }}
                 >
@@ -1278,7 +1386,7 @@ export function App() {
                 <button
                   id="btn-broadcast-evidence"
                   type="submit"
-                  disabled={isSubmittingEvidence || !targetClaimId}
+                  disabled={isSubmittingEvidence || !targetClaimId || isWrongNetwork}
                   className="btn-primary"
                   style={{ width: '100%', marginTop: '8px' }}
                 >
@@ -1391,7 +1499,7 @@ export function App() {
                 <button
                   id="btn-trigger-adjudicate"
                   onClick={() => handleRunAdjudication(adjClaimId)}
-                  disabled={isAdjudicating || !adjClaimId}
+                  disabled={isAdjudicating || !adjClaimId || isWrongNetwork}
                   className="btn-primary"
                   style={{ width: '100%', marginBottom: '24px' }}
                 >
