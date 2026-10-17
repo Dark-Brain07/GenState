@@ -2,11 +2,11 @@
 
 Futuristic Cyber-Emerald Glassmorphism terminal for decentralized semantic state adjudication on GenLayer StudioNet.
 
-## Live Deployed Contract Integration
+## Live Deployed Contract Integration (v1.3.0)
 
 - **Network:** GenLayer StudioNet (Chain ID: `61999` / `0xf22f`)
-- **Contract Address:** [`0x7e131cDcCd7CfFB2E78A527a369c88BCEd770cf6`](https://explorer-studio.genlayer.com/address/0x7e131cDcCd7CfFB2E78A527a369c88BCEd770cf6)
-- **Deployment Transaction:** [`0xc7d41232dcdfdd518aa4793297e1b02468242a2a2a55991cd9e8bbccb05726ea`](https://explorer-studio.genlayer.com/tx/0xc7d41232dcdfdd518aa4793297e1b02468242a2a2a55991cd9e8bbccb05726ea)
+- **Contract Address:** [`0xeD9b8ef621c57d8eeFBF45124D1535f5874A4be6`](https://explorer-studio.genlayer.com/address/0xeD9b8ef621c57d8eeFBF45124D1535f5874A4be6)
+- **Deployment Transaction:** [`0xd3850e5cb6b88846bbf0010717524e4660a7c94f2b1dfa888cc7cd261f25305b`](https://explorer-studio.genlayer.com/tx/0xd3850e5cb6b88846bbf0010717524e4660a7c94f2b1dfa888cc7cd261f25305b)
 - **Live Production URL:** [`https://genstate.vercel.app`](https://genstate.vercel.app)
 - **RPC Endpoint:** `https://studio.genlayer.com/api`
 

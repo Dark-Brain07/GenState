@@ -365,6 +365,25 @@ class LiveGenStateService {
   }
 
   /**
+   * Fetch individual contributor funding records for a claim.
+   */
+  public async fetchClaimFunders(claimId: string): Promise<{ funder: string; amount: string }[]> {
+    const runner = this.client || this.readClient;
+    const list = await runner.readContract({
+      address: GENSTATE_CONFIG.contractAddress,
+      functionName: "get_claim_funders",
+      args: [claimId],
+    });
+
+    if (!Array.isArray(list)) return [];
+
+    return list.map((item: any) => ({
+      funder: String(item.funder || ""),
+      amount: String(item.amount || "0"),
+    }));
+  }
+
+  /**
    * Fetch consensus adjudication ruling live from deployed contract.
    */
   public async fetchAdjudication(claimId: string): Promise<AdjudicationResult | null> {

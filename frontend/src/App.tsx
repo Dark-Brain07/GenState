@@ -91,6 +91,7 @@ export function App() {
   const [isSettling, setIsSettling] = useState<boolean>(false);
   const [isRefunding, setIsRefunding] = useState<boolean>(false);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
+  const [isFreezing, setIsFreezing] = useState<boolean>(false);
 
   // Failed-Transfer Recovery State (v1.3.0)
   const [pendingRecoveryWei, setPendingRecoveryWei] = useState<string>('0');
@@ -341,6 +342,26 @@ export function App() {
       alert(`Cancellation transaction error: ${err.message || err}`);
     } finally {
       setIsCancelling(false);
+    }
+  };
+
+  // Real On-Chain Freeze Claim Handler
+  const handleFreezeClaim = async (claimId: string, policy: string, windowSeconds = 86400) => {
+    if (isWrongNetwork) {
+      alert("Please switch to GenLayer StudioNet (Chain ID 61999) before submitting transactions.");
+      await genStateService.switchOrAddStudioNet();
+      return;
+    }
+
+    setIsFreezing(true);
+    try {
+      await genStateService.freezeClaim(claimId, policy, windowSeconds);
+      alert(`Claim ${claimId} successfully frozen with ${policy} policy and evidence window opened!`);
+      await loadBlockchainData(true);
+    } catch (err: any) {
+      alert(`Freeze transaction error: ${err.message || err}`);
+    } finally {
+      setIsFreezing(false);
     }
   };
 
@@ -1075,17 +1096,28 @@ export function App() {
                         </button>
                       )}
 
-                    {/* Cancel Claim Button */}
+                    {/* DRAFT Actions: Freeze Claim & Cancel Claim */}
                     {selectedClaim.status === 'DRAFT' && (
-                      <button
-                        className="btn-secondary"
-                        style={{ width: '100%', padding: '10px 14px', fontSize: '13px', color: '#ef4444', borderColor: '#ef4444' }}
-                        onClick={() => handleCancelClaim(selectedClaim.id)}
-                        disabled={isCancelling || isWrongNetwork}
-                      >
-                        {isCancelling ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
-                        <span>Cancel Claim & Auto-Refund Deposited GEN</span>
-                      </button>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <button
+                          className="btn-primary"
+                          style={{ width: '100%', padding: '10px 14px', fontSize: '13px' }}
+                          onClick={() => handleFreezeClaim(selectedClaim.id, selectedClaim.source_policy || 'OPEN_PUBLIC', selectedClaim.window_seconds || 86400)}
+                          disabled={isFreezing || isWrongNetwork}
+                        >
+                          {isFreezing ? <Loader2 size={15} className="animate-spin" /> : <Lock size={15} />}
+                          <span>Freeze Claim & Open Evidence Window</span>
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          style={{ width: '100%', padding: '10px 14px', fontSize: '13px', color: '#ef4444', borderColor: '#ef4444' }}
+                          onClick={() => handleCancelClaim(selectedClaim.id)}
+                          disabled={isCancelling || isWrongNetwork}
+                        >
+                          {isCancelling ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
+                          <span>Cancel Claim & Auto-Refund Deposited GEN</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
