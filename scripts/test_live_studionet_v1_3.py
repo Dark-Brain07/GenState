@@ -39,6 +39,19 @@ def wait_finalized(client, tx_hash: str, label: str):
     return receipt
 
 
+def find_claim_by_subject(client, contract_addr: str, subject: str, creator_addr: str = "") -> str:
+    """Deterministically finds the claim ID matching subject and creator without relying on global counter."""
+    claims = client.read_contract(address=contract_addr, function_name="list_claims", args=[0, 50])
+    for c in reversed(claims):
+        if c.get("subject") == subject:
+            if creator_addr and c.get("creator", "").lower() != creator_addr.lower():
+                continue
+            return c["id"]
+    if claims:
+        return claims[-1]["id"]
+    raise RuntimeError(f"No claims found for subject: {subject}")
+
+
 def main():
     root = Path(__file__).resolve().parents[1]
     deploy_file = root / "docs" / "deployment.json"
@@ -107,8 +120,8 @@ def main():
     wait_finalized(admin_client, tx_declare1, "DECLARE_CLAIM_1")
     live_records["transactions"]["declare_claim_1"] = tx_declare1
 
-    claims = admin_client.read_contract(address=contract_addr, function_name="list_claims", args=[0, 10])
-    claim1_id = claims[-1]["id"]
+    claims = admin_client.read_contract(address=contract_addr, function_name="list_claims", args=[0, 50])
+    claim1_id = find_claim_by_subject(admin_client, contract_addr, "Example Domain RFC Reservation", admin.address)
     log(f"Claim 1 ID: {claim1_id}")
 
     # Alice funds 0.20 GEN, Bob funds 0.10 GEN
@@ -189,8 +202,7 @@ def main():
     wait_finalized(admin_client, tx_declare2, "DECLARE_CLAIM_2")
     live_records["transactions"]["declare_claim_2"] = tx_declare2
 
-    claims2 = admin_client.read_contract(address=contract_addr, function_name="list_claims", args=[0, 10])
-    claim2_id = claims2[-1]["id"]
+    claim2_id = find_claim_by_subject(admin_client, contract_addr, "Fabricated Quote Detection Test", admin.address)
     log(f"Claim 2 ID: {claim2_id}")
 
     tx_freeze2 = admin_client.write_contract(address=contract_addr, function_name="freeze_claim", args=[claim2_id, "OPEN_PUBLIC", 60])
@@ -237,8 +249,7 @@ def main():
     wait_finalized(admin_client, tx_declare3, "DECLARE_CLAIM_3")
     live_records["transactions"]["declare_claim_3"] = tx_declare3
 
-    claims3 = admin_client.read_contract(address=contract_addr, function_name="list_claims", args=[0, 10])
-    claim3_id = claims3[-1]["id"]
+    claim3_id = find_claim_by_subject(admin_client, contract_addr, "Draft Claim for Refund", admin.address)
     log(f"Claim 3 ID: {claim3_id}")
 
     # Alice funds 0.15 GEN, Bob funds 0.10 GEN

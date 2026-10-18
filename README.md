@@ -77,44 +77,48 @@ Demonstrates that cancellation or refund **never** sends all funds to the first 
 
 ---
 
-### 4. Failed-Transfer Recovery Pattern
+### 4. Real Failed-Transfer Recovery Pattern
 
 - Un-transferred balances resulting from any failed native push transfer are safely captured in `pending_recoveries: TreeMap[str, u256]`.
 - Enforces pull-recovery via `recover_failed_transfer(recipient)` and public inspection via `get_pending_recovery(recipient)`.
-- Verified in Direct Mode Test 16 and live StudioNet verification.
+- Verified in Direct Mode Tests 16 & 17 through the REAL production `_send_gen()` helper with zero monkeypatching of contract helpers, covering both settlement and cancellation refund failure paths.
 
 ---
 
-## 🧪 Executable Behavioral Test Suite (18 Tests, 100% Pass)
+## 🧪 Executable Behavioral Test Suite (19 Direct Tests, 24/24 Total)
 
 Run with `python -m pytest tests/test_direct_gen_state.py -v`:
 
 ```
 ============================= test session starts =============================
 platform win32 -- Python 3.13.7, pytest-8.4.2, pluggy-1.6.0
-collected 18 items
+collected 19 items
 
 tests/test_direct_gen_state.py::test_access_control_freeze_and_cancel PASSED [  5%]
-tests/test_direct_gen_state.py::test_reference_date_validation PASSED        [ 11%]
-tests/test_direct_gen_state.py::test_evidence_window_deadlines PASSED        [ 16%]
-tests/test_direct_gen_state.py::test_multi_funder_accounting_and_individual_draft_refunds PASSED [ 22%]
-tests/test_direct_gen_state.py::test_multi_funder_inconclusive_adjudication_refunds PASSED [ 27%]
-tests/test_direct_gen_state.py::test_deterministic_reward_eligibility_and_settlement PASSED [ 33%]
-tests/test_direct_gen_state.py::test_fingerprint_persistence_and_quotation_verification PASSED [ 38%]
-tests/test_direct_gen_state.py::test_apex_domain_publisher_independence_enforcement PASSED [ 44%]
-tests/test_direct_gen_state.py::test_official_registry_policy_enforcement PASSED [ 50%]
-tests/test_direct_gen_state.py::test_regulatory_filing_policy_enforcement PASSED [ 55%]
-tests/test_direct_gen_state.py::test_conflicting_observations_consensus PASSED [ 61%]
-tests/test_direct_gen_state.py::test_malformed_llm_response_handling PASSED     [ 66%]
-tests/test_direct_gen_state.py::test_all_sources_unreachable_resolves_source_unavailable PASSED [ 72%]
-tests/test_direct_gen_state.py::test_refuted_verdict_bounty_settlement PASSED   [ 77%]
-tests/test_direct_gen_state.py::test_validator_disagreement_rolls_back_safely PASSED [ 83%]
-tests/test_direct_gen_state.py::test_failed_transfer_recovery_mechanism PASSED  [ 88%]
+tests/test_direct_gen_state.py::test_reference_date_validation PASSED        [ 10%]
+tests/test_direct_gen_state.py::test_evidence_window_deadlines PASSED        [ 15%]
+tests/test_direct_gen_state.py::test_multi_funder_accounting_and_individual_draft_refunds PASSED [ 21%]
+tests/test_direct_gen_state.py::test_multi_funder_inconclusive_adjudication_refunds PASSED [ 26%]
+tests/test_direct_gen_state.py::test_deterministic_reward_eligibility_and_settlement PASSED [ 31%]
+tests/test_direct_gen_state.py::test_fingerprint_persistence_and_quotation_verification PASSED [ 36%]
+tests/test_direct_gen_state.py::test_apex_domain_publisher_independence_enforcement PASSED [ 42%]
+tests/test_direct_gen_state.py::test_official_registry_policy_enforcement PASSED [ 47%]
+tests/test_direct_gen_state.py::test_regulatory_filing_policy_enforcement PASSED [ 52%]
+tests/test_direct_gen_state.py::test_conflicting_observations_consensus PASSED [ 57%]
+tests/test_direct_gen_state.py::test_malformed_llm_response_handling PASSED     [ 63%]
+tests/test_direct_gen_state.py::test_all_sources_unreachable_resolves_source_unavailable PASSED [ 68%]
+tests/test_direct_gen_state.py::test_refuted_verdict_bounty_settlement PASSED   [ 73%]
+tests/test_direct_gen_state.py::test_validator_disagreement_rolls_back_safely PASSED [ 78%]
+tests/test_direct_gen_state.py::test_failed_transfer_recovery_mechanism PASSED  [ 84%]
+tests/test_direct_gen_state.py::test_failed_refund_transfer_recovery_mechanism PASSED [ 89%]
 tests/test_direct_gen_state.py::test_unsupported_conclusive_outcome_blocked_by_quotation_check PASSED [ 94%]
 tests/test_direct_gen_state.py::test_unsupported_conclusive_outcome_blocked_by_mirror_source_check PASSED [100%]
 
-============================= 18 passed in 1.05s ==============================
+============================= 19 passed in 1.18s ==============================
 ```
+
+Full repository test suite across all modules (`python -m pytest tests/ -v`): **24 passed in 1.29s (100% pass rate)**.
+
 
 ---
 

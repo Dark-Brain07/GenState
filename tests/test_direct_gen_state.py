@@ -623,15 +623,21 @@ def test_validator_disagreement_rolls_back_safely(direct_vm, direct_deploy, dire
     assert claim["bounty_amount"] == str(BOUNTY_1_GEN)
 
 
-def test_failed_transfer_recovery_mechanism(direct_vm, direct_deploy, direct_alice, direct_bob, monkeypatch):
+def test_failed_transfer_recovery_mechanism(direct_vm, direct_deploy, direct_alice, direct_bob):
     """
-    Steward Requirement: Failed-transfer recovery demonstration.
-    Simulates a native GEN transfer failure (e.g. non-payable smart contract or EVM call failure).
+    Steward Requirement: Real failed-transfer recovery demonstration.
+    Executes the REAL production contract._send_gen() helper WITHOUT replacing or monkeypatching it.
+    Simulates a low-level EVM execution failure on the underlying recipient transfer (e.g. non-payable
+    contract recipient or EVM execution revert) when _send_gen invokes _Recipient(target).emit_transfer().
     Demonstrates:
-    - Failed transfer does NOT cause an unhandled revert that locks funds
-    - Un-transferred funds are captured in pending_recoveries
+    - Production _send_gen catches the EVM transfer exception in its try/except block
+    - The failed transfer does NOT revert or crash the settlement transaction
+    - Un-transferred funds are captured into contract.pending_recoveries via the production recovery branch
+    - Unauthorized callers attempting to recover funds are strictly rejected
     - Recipient or admin can safely recover funds via recover_failed_transfer()
+    - Pending balance is cleared to 0 upon successful recovery
     """
+    import sys
     direct_vm.warp("2026-10-14T10:00:00Z")
     contract = deploy(direct_deploy)
 
@@ -661,36 +667,99 @@ def test_failed_transfer_recovery_mechanism(direct_vm, direct_deploy, direct_ali
     direct_vm.warp("2026-10-14T10:02:00Z")
     contract.adjudicate(claim_id)
 
-    # Simulate a recipient transfer failure by monkeypatching contract._send_gen
-    original_send = contract._send_gen
+    # CRITICAL: contract._send_gen IS NOT REPLACED OR MONKEYPATCHED AT ALL!
+    # The production _send_gen helper executes in full.
+    # We simulate a low-level EVM call exception during _Recipient(target).emit_transfer
+    # (e.g. non-payable smart contract recipient or EVM execution fault).
+    mod = sys.modules["_contract_gen_state"]
+    proxy_cls = mod._Recipient.func
+    orig_emit = proxy_cls.emit_transfer
 
-    def failing_send(to, amount, recovery_key=""):
-        key = recovery_key if recovery_key else (to.as_hex if hasattr(to, "as_hex") else str(to))
-        current = (
-            contract.pending_recoveries[key]
-            if key in contract.pending_recoveries
-            else amount * 0
-        )
-        contract.pending_recoveries[key] = current + amount
+    def failing_emit(self, **kwargs):
+        raise RuntimeError("EVM call reverted: recipient contract does not accept native GEN or call failed")
 
-    monkeypatch.setattr(contract, "_send_gen", failing_send)
+    proxy_cls.emit_transfer = failing_emit
 
-    # Settle bounty to Bob -> transfer push fails gracefully and captures into pending recovery
+    # Settle bounty to Bob -> production _send_gen executes, catches the real transfer failure,
+    # and safely captures the balance into pending_recoveries via the real production recovery path!
     direct_vm.sender = direct_alice
     contract.settle_bounty(claim_id, direct_bob)
 
-    # Assert funds captured in pending recovery
+    # Assert pending recovery was populated by production _send_gen
     pending = contract.get_pending_recovery(direct_bob)
     assert pending == str(BOUNTY_HALF_GEN)
 
+    # Claim state transitioned cleanly without revert
+    claim = contract.get_claim(claim_id)
+    assert claim["status"] == "SETTLED"
+
+    # Unauthorized party (Alice) attempts to recover Bob's funds -> must revert
+    with pytest.raises(Exception) as exc:
+        contract.recover_failed_transfer(direct_bob)
+    assert "Only the recipient or protocol admin can recover failed transfers" in str(exc.value)
+
+    # Restore emit_transfer to working state
+    proxy_cls.emit_transfer = orig_emit
+
     # Now Bob recovers his funds via recover_failed_transfer()
-    # Restore normal _send_gen
-    monkeypatch.setattr(contract, "_send_gen", original_send)
     direct_vm.sender = direct_bob
     recovered = contract.recover_failed_transfer(direct_bob)
     assert recovered == str(BOUNTY_HALF_GEN)
 
     # Pending balance is now cleared
+    assert contract.get_pending_recovery(direct_bob) == "0"
+
+    # Second recovery attempt must revert (no double-recovery)
+    with pytest.raises(Exception) as exc2:
+        contract.recover_failed_transfer(direct_bob)
+    assert "No pending recoverable funds for this recipient" in str(exc2.value)
+
+
+def test_failed_refund_transfer_recovery_mechanism(direct_vm, direct_deploy, direct_alice, direct_bob):
+    """
+    Demonstrates that failed refund transfers during claim cancellation ALSO route through
+    the production _send_gen() recovery branch into pending_recoveries without replacing _send_gen.
+    """
+    import sys
+    direct_vm.warp("2026-10-14T10:00:00Z")
+    contract = deploy(direct_deploy)
+
+    # Alice creates claim in DRAFT
+    direct_vm.sender = direct_alice
+    claim_id = contract.declare_claim("REGISTRY_RECORD", "Cancellation Bounty", "status", "ACTIVE", "2026-01-01")
+
+    # Bob funds the claim
+    direct_vm.sender = direct_bob
+    direct_vm.value = BOUNTY_HALF_GEN
+    contract.fund_bounty(claim_id)
+    direct_vm.value = 0
+
+    # Simulate EVM transfer failure during refund push
+    mod = sys.modules["_contract_gen_state"]
+    proxy_cls = mod._Recipient.func
+    orig_emit = proxy_cls.emit_transfer
+
+    def failing_emit(self, **kwargs):
+        raise RuntimeError("EVM refund transfer failed: non-payable account")
+
+    proxy_cls.emit_transfer = failing_emit
+
+    # Alice cancels claim in DRAFT -> production _send_gen runs, catches EVM failure, captures in pending_recoveries
+    direct_vm.sender = direct_alice
+    contract.cancel_claim(claim_id)
+
+    # Bob's refund is captured in pending_recoveries
+    assert contract.get_pending_recovery(direct_bob) == str(BOUNTY_HALF_GEN)
+    claim = contract.get_claim(claim_id)
+    assert claim["status"] == "CANCELLED"
+
+    # Restore emit_transfer to working state
+    proxy_cls.emit_transfer = orig_emit
+
+    # Bob pulls his refund via recover_failed_transfer
+    direct_vm.sender = direct_bob
+    recovered = contract.recover_failed_transfer(direct_bob)
+    assert recovered == str(BOUNTY_HALF_GEN)
     assert contract.get_pending_recovery(direct_bob) == "0"
 
 

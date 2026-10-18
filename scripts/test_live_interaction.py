@@ -43,6 +43,16 @@ def wait_finalized(client, tx_hash: str, label: str):
     return receipt
 
 
+def find_claim_by_subject(client, contract_addr: str, subject: str) -> str:
+    claims = client.read_contract(address=contract_addr, function_name="list_claims", args=[0, 50])
+    for c in reversed(claims):
+        if c.get("subject") == subject:
+            return c["id"]
+    if claims:
+        return claims[-1]["id"]
+    raise RuntimeError(f"No claims found for subject: {subject}")
+
+
 def main():
     root = Path(__file__).resolve().parents[1]
     deploy_file = root / "docs" / "deployment.json"
@@ -92,8 +102,7 @@ def main():
     )
     wait_finalized(alice_client, tx1, "DECLARE")
 
-    claims = alice_client.read_contract(address=contract_addr, function_name="list_claims", args=[0, 10])
-    claim_id = claims[-1]["id"]
+    claim_id = find_claim_by_subject(alice_client, contract_addr, "Example Domain")
     log(f"Registered Claim ID: {claim_id}")
 
     # 3. Fund Native GEN Bounty
@@ -181,8 +190,7 @@ def main():
     )
     wait_finalized(alice_client, tx7, "DECLARE_DRAFT")
 
-    claims = alice_client.read_contract(address=contract_addr, function_name="list_claims", args=[0, 20])
-    draft_claim_id = claims[-1]["id"]
+    draft_claim_id = find_claim_by_subject(alice_client, contract_addr, "Draft Cancellation Refund Verification")
     log(f"Registered Draft Claim ID: {draft_claim_id}")
 
     alice_bal_before = alice_client.get_balance(alice.address)

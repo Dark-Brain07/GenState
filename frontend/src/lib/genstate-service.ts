@@ -462,8 +462,67 @@ class LiveGenStateService {
   }
 
   /**
+   * Deterministically extract a return value matching "CLAIM-X" from a transaction receipt.
+   * Scans receipt returnValue, result, returnData, leaderReceipts, and nested properties.
+   */
+  private extractClaimIdFromReceipt(receipt: any): string {
+    if (!receipt) return "";
+
+    // 1. Direct string return value
+    if (typeof receipt.returnValue === "string" && receipt.returnValue.trim().startsWith("CLAIM-")) {
+      return receipt.returnValue.trim();
+    }
+    // 2. Direct result string
+    if (typeof receipt.result === "string" && receipt.result.trim().startsWith("CLAIM-")) {
+      return receipt.result.trim();
+    }
+    // 3. Direct returnData string
+    if (typeof receipt.returnData === "string" && receipt.returnData.trim().startsWith("CLAIM-")) {
+      return receipt.returnData.trim();
+    }
+
+    // 4. Check consensus_data.leader_receipt entries
+    const leaderReceiptRaw = receipt.consensus_data?.leader_receipt;
+    const leaderReceipts = Array.isArray(leaderReceiptRaw)
+      ? leaderReceiptRaw
+      : leaderReceiptRaw
+        ? [leaderReceiptRaw]
+        : [];
+
+    for (const lr of leaderReceipts) {
+      if (typeof lr?.result === "string" && lr.result.trim().startsWith("CLAIM-")) {
+        return lr.result.trim();
+      }
+      if (typeof lr?.genvm_result === "string" && lr.genvm_result.trim().startsWith("CLAIM-")) {
+        return lr.genvm_result.trim();
+      }
+      if (typeof lr?.return_value === "string" && lr.return_value.trim().startsWith("CLAIM-")) {
+        return lr.return_value.trim();
+      }
+    }
+
+    // 5. Recursive search across receipt properties matching /^CLAIM-\d+$/
+    const findClaimPattern = (obj: any, depth = 0): string => {
+      if (!obj || depth > 5) return "";
+      if (typeof obj === "string" && /^CLAIM-\d+$/.test(obj.trim())) {
+        return obj.trim();
+      }
+      if (typeof obj === "object") {
+        for (const k of Object.keys(obj)) {
+          const res = findClaimPattern(obj[k], depth + 1);
+          if (res) return res;
+        }
+      }
+      return "";
+    };
+
+    return findClaimPattern(receipt);
+  }
+
+  /**
    * Broadcast real on-chain transaction: declare_claim.
-   * Deterministically queries created claim instead of deriving solely from counter.
+   * Deterministically resolves created claim without ANY race-prone global counter fallback.
+   * Extracts directly from receipt, or queries the contract matching the caller and exact asserted parameters.
    */
   public async declareClaim(
     claimType: string,
@@ -476,21 +535,59 @@ class LiveGenStateService {
     await this.assertCorrectNetwork();
     await this.ensureBalance();
 
+    const normSubject = subject.trim();
+    const normPredicate = predicate.trim();
+    const normAssertedValue = assertedValue.trim();
+    const normReferenceDate = referenceDate.trim();
+    const normClaimType = claimType.trim().toUpperCase();
+
     const txHash = await this.client.writeContract({
       address: GENSTATE_CONFIG.contractAddress,
       functionName: "declare_claim",
-      args: [claimType, subject, predicate, assertedValue, referenceDate],
+      args: [normClaimType, normSubject, normPredicate, normAssertedValue, normReferenceDate],
     });
 
     const receipt = await this.waitForFinalizedSuccess(txHash);
 
-    // Retrieve deterministic claim ID from receipt return value or authoritative stats
-    let claimId = "";
-    if (receipt && receipt.returnValue && typeof receipt.returnValue === "string" && receipt.returnValue.startsWith("CLAIM-")) {
-      claimId = receipt.returnValue;
-    } else {
-      const stats = await this.fetchProtocolStats();
-      claimId = `CLAIM-${stats.total_claims}`;
+    // 1. First: Extract deterministic claim ID from transaction receipt
+    let claimId = this.extractClaimIdFromReceipt(receipt);
+
+    // 2. Second: If not directly exposed in receipt, query contract deterministically
+    // by matching the caller's address AND this transaction's exact unique claim parameters.
+    // NEVER fall back to global claim counter.
+    if (!claimId) {
+      const callerAddr = (this.account?.address || this.browserAddress || "").toLowerCase();
+      // Retry up to 3 times with brief backoff for state propagation
+      for (let attempt = 0; attempt < 3 && !claimId; attempt++) {
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        }
+        // Fetch up to 50 most recent claims
+        const allClaims = await this.fetchClaims(0, 50);
+        // Find exact match from newest to oldest
+        const matched = allClaims.slice().reverse().find((c) => {
+          const matchCreator = callerAddr ? c.creator.toLowerCase() === callerAddr : true;
+          return (
+            matchCreator &&
+            c.claim_type === normClaimType &&
+            c.subject === normSubject &&
+            c.predicate === normPredicate &&
+            c.asserted_value === normAssertedValue &&
+            c.reference_date === normReferenceDate &&
+            c.status === "DRAFT"
+          );
+        });
+
+        if (matched && matched.id && matched.id.startsWith("CLAIM-")) {
+          claimId = matched.id;
+        }
+      }
+    }
+
+    if (!claimId) {
+      throw new Error(
+        `Transaction ${txHash} confirmed on-chain, but the created claim ID could not be deterministically matched to your wallet's declared parameters. Never guessing from global counters to prevent race conditions.`
+      );
     }
 
     return { txHash, claimId };
