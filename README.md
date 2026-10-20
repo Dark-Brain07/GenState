@@ -8,15 +8,15 @@ GenState is an intelligent state consensus protocol built natively on GenLayer's
 
 ---
 
-## 🚀 Live StudioNet Deployment (v1.3.0)
+## 🚀 Live StudioNet Deployment (v1.4.0)
 
 | Parameter | Value |
 | :--- | :--- |
 | **Network** | **GenLayer StudioNet** (Chain ID: `61999` / `0xf22f`) |
-| **Contract Name** | `GenState` (v1.3.0) |
-| **Deployed Contract Address** | [`0xeD9b8ef621c57d8eeFBF45124D1535f5874A4be6`](https://explorer-studio.genlayer.com/address/0xeD9b8ef621c57d8eeFBF45124D1535f5874A4be6) |
-| **Deployment Transaction Hash** | [`0xd3850e5cb6b88846bbf0010717524e4660a7c94f2b1dfa888cc7cd261f25305b`](https://explorer-studio.genlayer.com/tx/0xd3850e5cb6b88846bbf0010717524e4660a7c94f2b1dfa888cc7cd261f25305b) |
-| **Deployer / Admin Address** | `0xC602f93dF0F6e6b3403b6e8Ce719CfEB3D8C2E7C` |
+| **Contract Name** | `GenState` (v1.4.0) |
+| **Deployed Contract Address** | [`0xFcf0d6c093470a008e2C9A6E1cE95698bC96Fe76`](https://explorer-studio.genlayer.com/address/0xFcf0d6c093470a008e2C9A6E1cE95698bC96Fe76) |
+| **Deployment Transaction Hash** | [`0x5c752f8355dd88128e836aabf49b0cc17d07d49c45b2d96662f3b763a07506fd`](https://explorer-studio.genlayer.com/tx/0x5c752f8355dd88128e836aabf49b0cc17d07d49c45b2d96662f3b763a07506fd) |
+| **Deployer Address** | `0x3252f04b1923B6fe4e53396f1FC80A0Db1CB3C17` |
 | **Live Production DApp** | [https://genstate.vercel.app](https://genstate.vercel.app) |
 | **GitHub Repository** | [https://github.com/Dark-Brain07/GenState](https://github.com/Dark-Brain07/GenState) |
 | **Steward Review Resolution Report** | [docs/STEWARD_REVIEW_RESOLUTION_REPORT.md](docs/STEWARD_REVIEW_RESOLUTION_REPORT.md) |
@@ -24,56 +24,54 @@ GenState is an intelligent state consensus protocol built natively on GenLayer's
 
 ---
 
-## 📜 Verified Live StudioNet Transaction Proofs (v1.3.0)
+## 📜 Verified Live StudioNet Transaction Proofs (v1.4.0)
 
 Every operation below was executed, mined, and finalized by GenLayer validators on StudioNet (Chain ID `61999`):
 
-### 1. Multi-Funder Deposit & Deterministic Settlement Lifecycle (`CLAIM-1`)
+### 1. 100% Race-Free Concurrent Identical Declarations from Same Wallet (Steward Oct 20 Requirement)
+
+Demonstrates that two concurrent declarations from the **SAME wallet** (`0xd2431CA38735C2fd438e2cAa23F094191D89675b`) with **IDENTICAL parameters** resolve unambiguously with zero misidentification:
+
+| Operation | Request ID / Details | Tx Hash / Explorer Link | Finality |
+| :--- | :--- | :--- | :--- |
+| **Declaration A** | `REQ-ALICE-CONCURRENT-1792467234-A` ──> Resolved: `CLAIM-3` | [`0x047a1c776faa33dfafae14a18e49d3b32be1e01e0f3deca84cd084541dd81b02`](https://explorer-studio.genlayer.com/tx/0x047a1c776faa33dfafae14a18e49d3b32be1e01e0f3deca84cd084541dd81b02) | Finalized (Status: 7) |
+| **Declaration B (CONCURRENT IDENTICAL)** | `REQ-ALICE-CONCURRENT-1792467234-B` ──> Resolved: `CLAIM-4` | [`0xd1928c6288a14a3a35d75b6926bc5baf6426d7ade845bae85893b9f8f01a176d`](https://explorer-studio.genlayer.com/tx/0xd1928c6288a14a3a35d75b6926bc5baf6426d7ade845bae85893b9f8f01a176d) | Finalized (Status: 7) |
+
+- **Deterministic Query Verification (`get_claim_by_request_id`)**:
+  - `get_claim_by_request_id(Alice, "REQ-ALICE-CONCURRENT-1792467234-A")` ──> Returns `CLAIM-3` (`REQ-ALICE-CONCURRENT-1792467234-A`)
+  - `get_claim_by_request_id(Alice, "REQ-ALICE-CONCURRENT-1792467234-B")` ──> Returns `CLAIM-4` (`REQ-ALICE-CONCURRENT-1792467234-B`)
+
+---
+
+### 2. Multi-Funder Deposit & Deterministic Settlement Lifecycle (`CLAIM-3`)
 
 | Operation | Participant / Details | Tx Hash / Explorer Link | Finality |
 | :--- | :--- | :--- | :--- |
-| **Claim Registration** | Factual Assertion registered in `DRAFT` status | [`0x8e206f673d4da22008a2df8efa59465569cd8e3ccbb4d5e0e44316501eaebe1d`](https://explorer-studio.genlayer.com/tx/0x8e206f673d4da22008a2df8efa59465569cd8e3ccbb4d5e0e44316501eaebe1d) | Finalized (Status: 7) |
-| **Funder 1 Deposit** | Alice deposits **0.20 GEN** | [`0x707ca0f4d1d22e50b5eb09931337efa37ada52d498fcef07835c13a83e969e78`](https://explorer-studio.genlayer.com/tx/0x707ca0f4d1d22e50b5eb09931337efa37ada52d498fcef07835c13a83e969e78) | Finalized (Status: 7) |
-| **Funder 2 Deposit** | Bob deposits **0.10 GEN** (Total Escrow: 0.30 GEN) | [`0x189e0e7ac428ac62e67a21527fd46b3b54d1736f2303fc8a8e7949fabc349c5a`](https://explorer-studio.genlayer.com/tx/0x189e0e7ac428ac62e67a21527fd46b3b54d1736f2303fc8a8e7949fabc349c5a) | Finalized (Status: 7) |
-| **Freeze Claim** | Opens 60s timed window with `OPEN_PUBLIC` policy | [`0x6d40ed781f05786b3689f2f27bf6b64ccb223b6af456a818875720dc42f69961`](https://explorer-studio.genlayer.com/tx/0x6d40ed781f05786b3689f2f27bf6b64ccb223b6af456a818875720dc42f69961) | Finalized (Status: 7) |
-| **Qualifying Evidence** | Charlie submits `https://example.com` with verbatim quote | [`0x845f3f187dc4268fec625c0c7768c84cdc112042e847af21d39b999272b60852`](https://explorer-studio.genlayer.com/tx/0x845f3f187dc4268fec625c0c7768c84cdc112042e847af21d39b999272b60852) | Finalized (Status: 7) |
-| **Validator Consensus Adjudication** | Multi-validator quorum: SHA-256 fingerprint saved, verbatim quote verified, Charlie designated qualifying recipient | [`0xd8c2f4506dcf2608d0fe0476d98118d4111ad163278f849f00bd0a890b9f0f9e`](https://explorer-studio.genlayer.com/tx/0xd8c2f4506dcf2608d0fe0476d98118d4111ad163278f849f00bd0a890b9f0f9e) | Finalized (Status: 7) |
-| **Native GEN Settlement Payout** | Genuine GEN transfer via `_Recipient.emit_transfer()` to Charlie: **+0.30 GEN delivered** | [`0x4012d1f3d18626aa61278e06bc1094cdb3dfa816c3d90d7e1a0c0904d5e25f7b`](https://explorer-studio.genlayer.com/tx/0x4012d1f3d18626aa61278e06bc1094cdb3dfa816c3d90d7e1a0c0904d5e25f7b) | Finalized (Status: 7) |
+| **Funder 1 Deposit** | Alice deposits **0.20 GEN** | [`0xf74b6217b323c5ef40e38cc0e95ae61c3ddb3d4af4d80ac978b9d930d8228622`](https://explorer-studio.genlayer.com/tx/0xf74b6217b323c5ef40e38cc0e95ae61c3ddb3d4af4d80ac978b9d930d8228622) | Finalized (Status: 7) |
+| **Funder 2 Deposit** | Bob deposits **0.10 GEN** (Total Escrow: 0.30 GEN) | [`0x2084c88a1d733a84b1e041019d0228fc71604f12c35a8d6351a4974f832a65ff`](https://explorer-studio.genlayer.com/tx/0x2084c88a1d733a84b1e041019d0228fc71604f12c35a8d6351a4974f832a65ff) | Finalized (Status: 7) |
+| **Freeze Claim** | Opens 60s timed window with `OPEN_PUBLIC` policy | [`0x9796d2502a55fa0fb086007163daed85974017fc4187b0395d8c13f74237605f`](https://explorer-studio.genlayer.com/tx/0x9796d2502a55fa0fb086007163daed85974017fc4187b0395d8c13f74237605f) | Finalized (Status: 7) |
+| **Qualifying Evidence** | Charlie submits `https://example.com` with verbatim quote | [`0x0b3a7308d9adeedf5b7550be9159767e22a9b475b7dbf17929c718cdc4236532`](https://explorer-studio.genlayer.com/tx/0x0b3a7308d9adeedf5b7550be9159767e22a9b475b7dbf17929c718cdc4236532) | Finalized (Status: 7) |
+| **Validator Consensus Adjudication** | Multi-validator quorum: SHA-256 fingerprint saved, verbatim quote verified, Charlie designated qualifying recipient | [`0x4431e332d4dcc609f5f8fe5e94764ec75148845a808efe3dd94a8bd454ff1322`](https://explorer-studio.genlayer.com/tx/0x4431e332d4dcc609f5f8fe5e94764ec75148845a808efe3dd94a8bd454ff1322) | Finalized (Status: 7) |
+| **Native GEN Settlement Payout** | Genuine GEN transfer via `_Recipient.emit_transfer()` to Charlie: **+0.30 GEN delivered** | [`0x1fc848a062eb4fac463669033cb86d6c8c77d63c9979deed9a38d3fc628cc4c3`](https://explorer-studio.genlayer.com/tx/0x1fc848a062eb4fac463669033cb86d6c8c77d63c9979deed9a38d3fc628cc4c3) | Finalized (Status: 7) |
 
 #### Verified Settlement Balance Movement:
-- **Charlie Wallet Before Settlement**: `100,000,000,000,000,000 wei` (0.10 GEN)
-- **Charlie Wallet After Settlement**: `400,000,000,000,000,000 wei` (0.40 GEN)
-- **Net Genuine Payout**: **`+300,000,000,000,000,000 wei` (+0.30 GEN exact delivery)**
+- **Charlie Wallet Before Settlement**: `1,000,000,000,000,000,000 wei` (1.0000 GEN)
+- **Charlie Wallet After Settlement**: `1,300,000,000,000,000,000 wei` (1.3000 GEN)
+- **Net Genuine Payout**: **`+300,000,000,000,000,000 wei` (+0.3000 GEN exact delivery)**
 
 ---
 
-### 2. Quotation Check Blocks Unsupported Conclusive Outcome (`CLAIM-2`)
-
-Demonstrates that evidence with unverified or fabricated quotations is strictly prevented from receiving conclusive verdicts (`CONFIRMED` or `REFUTED`):
+### 3. Multi-Funder Cancellation & Exact Individual Refunds (`CLAIM-4`)
 
 | Operation | Participant / Details | Tx Hash / Explorer Link | Finality |
 | :--- | :--- | :--- | :--- |
-| **Claim Registration** | Registered in `DRAFT` status | [`0x38d8fecb06a1c69dfb42b62464fcd3942443202521ff732f9ab6d5b0d8998b39`](https://explorer-studio.genlayer.com/tx/0x38d8fecb06a1c69dfb42b62464fcd3942443202521ff732f9ab6d5b0d8998b39) | Finalized (Status: 7) |
-| **Freeze Claim** | Opens 60s timed window | [`0xc33e7e5d15ba15449ea2c51f444e62a242e441eb89c7845fea4e5a9ce3cc3703`](https://explorer-studio.genlayer.com/tx/0xc33e7e5d15ba15449ea2c51f444e62a242e441eb89c7845fea4e5a9ce3cc3703) | Finalized (Status: 7) |
-| **Fabricated Quote Submission** | Charlie submits quote not present in source page | [`0x80192981ce02262a58703ea12231edeb91a3a0db1b51bb2f80caa5bc55784681`](https://explorer-studio.genlayer.com/tx/0x80192981ce02262a58703ea12231edeb91a3a0db1b51bb2f80caa5bc55784681) | Finalized (Status: 7) |
-| **Consensus Adjudication** | Conclusive verdict blocked; downgraded to `INSUFFICIENT_EVIDENCE`; qualifying recipients cleared | [`0x082b8354d8ec7e54d946f2b3e938e6220fddc9b313c21e35e0cdd254fda2f663`](https://explorer-studio.genlayer.com/tx/0x082b8354d8ec7e54d946f2b3e938e6220fddc9b313c21e35e0cdd254fda2f663) | Finalized (Status: 7) |
-
----
-
-### 3. Multi-Funder Cancellation & Exact Individual Refunds (`CLAIM-3`)
-
-Demonstrates that cancellation or refund **never** sends all funds to the first funder, but accurately returns each contributor's deposited GEN:
-
-| Operation | Participant / Details | Tx Hash / Explorer Link | Finality |
-| :--- | :--- | :--- | :--- |
-| **Claim Registration** | Registered in `DRAFT` status | [`0x10b26cbf105e21fe6ecbae34f55557ae05568c056b09459ed38b15622d615a2f`](https://explorer-studio.genlayer.com/tx/0x10b26cbf105e21fe6ecbae34f55557ae05568c056b09459ed38b15622d615a2f) | Finalized (Status: 7) |
-| **Funder 1 Deposit** | Alice deposits **0.15 GEN** (`150,000,000,000,000,000 wei`) | [`0x5337780c9d085074d21c5ca296ab8b1b82b24a1357c10bb5d684e2da7f7483a0`](https://explorer-studio.genlayer.com/tx/0x5337780c9d085074d21c5ca296ab8b1b82b24a1357c10bb5d684e2da7f7483a0) | Finalized (Status: 7) |
-| **Funder 2 Deposit** | Bob deposits **0.10 GEN** (`100,000,000,000,000,000 wei`) | [`0x50a8c9c8dbe64ac6e6285c25f5ad645217279bfebad319c4ce4fd36bae6172a7`](https://explorer-studio.genlayer.com/tx/0x50a8c9c8dbe64ac6e6285c25f5ad645217279bfebad319c4ce4fd36bae6172a7) | Finalized (Status: 7) |
-| **Draft Cancellation** | Admin cancels claim; contract executes multi-funder restitution loop | [`0x55314b8aa385959216efd83790959991d7f99b3010e6c3f6dc3fa1d5138866b9`](https://explorer-studio.genlayer.com/tx/0x55314b8aa385959216efd83790959991d7f99b3010e6c3f6dc3fa1d5138866b9) | Finalized (Status: 7) |
+| **Funder 1 Deposit** | Alice deposits **0.15 GEN** (`150,000,000,000,000,000 wei`) | [`0xf45ec9a532787b61798e452c91ebd5d8b30291d0babc384957ccdc02cc93bf57`](https://explorer-studio.genlayer.com/tx/0xf45ec9a532787b61798e452c91ebd5d8b30291d0babc384957ccdc02cc93bf57) | Finalized (Status: 7) |
+| **Funder 2 Deposit** | Bob deposits **0.10 GEN** (`100,000,000,000,000,000 wei`) | [`0xcd926d8fb095a59de770bc6208bf345326c6c999ce069310eaff29a5e68da18c`](https://explorer-studio.genlayer.com/tx/0xcd926d8fb095a59de770bc6208bf345326c6c999ce069310eaff29a5e68da18c) | Finalized (Status: 7) |
+| **Draft Cancellation** | Alice cancels claim; contract executes multi-funder restitution loop | [`0xef1d008445f76ed1ccbe4937413bbe75925cafb06b650523c4cb87bb599cbff6`](https://explorer-studio.genlayer.com/tx/0xef1d008445f76ed1ccbe4937413bbe75925cafb06b650523c4cb87bb599cbff6) | Finalized (Status: 7) |
 
 #### Exact Individual Restitution Proof:
 - **Alice Refund Delta**: `+150,000,000,000,000,000 wei` (**+0.15 GEN exact refund**)
-- **Bob Refund Delta**: `+100,000,000,000,000,000 wei` (**+0.10 GEN exact refund**)
+- **Bob Refund Delta (non-cancelling contributor)**: `+100,000,000,000,000,000 wei` (**+0.10 GEN exact refund**)
 
 ---
 
@@ -85,39 +83,43 @@ Demonstrates that cancellation or refund **never** sends all funds to the first 
 
 ---
 
-## 🧪 Executable Behavioral Test Suite (19 Direct Tests, 24/24 Total)
+## 🧪 Executable Behavioral Test Suite (22 Direct Tests, 27/27 Total)
 
 Run with `python -m pytest tests/test_direct_gen_state.py -v`:
 
 ```
 ============================= test session starts =============================
 platform win32 -- Python 3.13.7, pytest-8.4.2, pluggy-1.6.0
-collected 19 items
+collected 22 items
 
-tests/test_direct_gen_state.py::test_access_control_freeze_and_cancel PASSED [  5%]
-tests/test_direct_gen_state.py::test_reference_date_validation PASSED        [ 10%]
-tests/test_direct_gen_state.py::test_evidence_window_deadlines PASSED        [ 15%]
-tests/test_direct_gen_state.py::test_multi_funder_accounting_and_individual_draft_refunds PASSED [ 21%]
-tests/test_direct_gen_state.py::test_multi_funder_inconclusive_adjudication_refunds PASSED [ 26%]
-tests/test_direct_gen_state.py::test_deterministic_reward_eligibility_and_settlement PASSED [ 31%]
-tests/test_direct_gen_state.py::test_fingerprint_persistence_and_quotation_verification PASSED [ 36%]
-tests/test_direct_gen_state.py::test_apex_domain_publisher_independence_enforcement PASSED [ 42%]
-tests/test_direct_gen_state.py::test_official_registry_policy_enforcement PASSED [ 47%]
-tests/test_direct_gen_state.py::test_regulatory_filing_policy_enforcement PASSED [ 52%]
-tests/test_direct_gen_state.py::test_conflicting_observations_consensus PASSED [ 57%]
-tests/test_direct_gen_state.py::test_malformed_llm_response_handling PASSED     [ 63%]
-tests/test_direct_gen_state.py::test_all_sources_unreachable_resolves_source_unavailable PASSED [ 68%]
-tests/test_direct_gen_state.py::test_refuted_verdict_bounty_settlement PASSED   [ 73%]
-tests/test_direct_gen_state.py::test_validator_disagreement_rolls_back_safely PASSED [ 78%]
-tests/test_direct_gen_state.py::test_failed_transfer_recovery_mechanism PASSED  [ 84%]
-tests/test_direct_gen_state.py::test_failed_refund_transfer_recovery_mechanism PASSED [ 89%]
-tests/test_direct_gen_state.py::test_unsupported_conclusive_outcome_blocked_by_quotation_check PASSED [ 94%]
-tests/test_direct_gen_state.py::test_unsupported_conclusive_outcome_blocked_by_mirror_source_check PASSED [100%]
+tests/test_direct_gen_state.py::test_access_control_freeze_and_cancel PASSED [  4%]
+tests/test_direct_gen_state.py::test_reference_date_validation PASSED        [  9%]
+tests/test_direct_gen_state.py::test_evidence_window_deadlines PASSED        [ 13%]
+tests/test_direct_gen_state.py::test_multi_funder_accounting_and_individual_draft_refunds PASSED [ 18%]
+tests/test_direct_gen_state.py::test_multi_funder_inconclusive_adjudication_refunds PASSED [ 22%]
+tests/test_direct_gen_state.py::test_deterministic_reward_eligibility_and_settlement PASSED [ 27%]
+tests/test_direct_gen_state.py::test_fingerprint_persistence_and_quotation_verification PASSED [ 31%]
+tests/test_direct_gen_state.py::test_apex_domain_publisher_independence_enforcement PASSED [ 36%]
+tests/test_direct_gen_state.py::test_official_registry_policy_enforcement PASSED [ 40%]
+tests/test_direct_gen_state.py::test_regulatory_filing_policy_enforcement PASSED [ 45%]
+tests/test_direct_gen_state.py::test_conflicting_observations_consensus PASSED [ 50%]
+tests/test_direct_gen_state.py::test_malformed_llm_response_handling PASSED     [ 54%]
+tests/test_direct_gen_state.py::test_all_sources_unreachable_resolves_source_unavailable PASSED [ 59%]
+tests/test_direct_gen_state.py::test_refuted_verdict_bounty_settlement PASSED   [ 63%]
+tests/test_direct_gen_state.py::test_validator_disagreement_rolls_back_safely PASSED [ 68%]
+tests/test_direct_gen_state.py::test_failed_transfer_recovery_mechanism PASSED  [ 72%]
+tests/test_direct_gen_state.py::test_failed_refund_transfer_recovery_mechanism PASSED [ 77%]
+tests/test_direct_gen_state.py::test_unsupported_conclusive_outcome_blocked_by_quotation_check PASSED [ 81%]
+tests/test_direct_gen_state.py::test_unsupported_conclusive_outcome_blocked_by_mirror_source_check PASSED [ 86%]
+tests/test_direct_gen_state.py::test_concurrent_identical_declarations_disambiguated_by_request_id PASSED [ 90%]
+tests/test_direct_gen_state.py::test_duplicate_request_id_replay_rejected PASSED [ 95%]
+tests/test_direct_gen_state.py::test_concurrent_identical_declarations_without_request_id_prevent_race PASSED [100%]
 
-============================= 19 passed in 1.18s ==============================
+============================= 22 passed in 1.48s ==============================
 ```
 
-Full repository test suite across all modules (`python -m pytest tests/ -v`): **24 passed in 1.29s (100% pass rate)**.
+Full repository test suite across all modules (`python -m pytest tests/ -v`): **27 passed in 1.52s (100% pass rate)**.
+
 
 
 ---

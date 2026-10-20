@@ -1,12 +1,12 @@
 export const GENSTATE_CONFIG = {
-  contractAddress: "0xeD9b8ef621c57d8eeFBF45124D1535f5874A4be6",
-  deploymentTxHash: "0xd3850e5cb6b88846bbf0010717524e4660a7c94f2b1dfa888cc7cd261f25305b",
-  genesisTxHash: "0xd3850e5cb6b88846bbf0010717524e4660a7c94f2b1dfa888cc7cd261f25305b",
+  contractAddress: "0xFcf0d6c093470a008e2C9A6E1cE95698bC96Fe76",
+  deploymentTxHash: "0x5c752f8355dd88128e836aabf49b0cc17d07d49c45b2d96662f3b763a07506fd",
+  genesisTxHash: "0x5c752f8355dd88128e836aabf49b0cc17d07d49c45b2d96662f3b763a07506fd",
   network: "StudioNet",
   chainId: 61999,
   chainIdHex: "0xf22f",
   rpcUrl: "https://studio.genlayer.com/api",
   explorerBase: "https://explorer-studio.genlayer.com/address/",
-  explorerUrl: "https://explorer-studio.genlayer.com/address/0xeD9b8ef621c57d8eeFBF45124D1535f5874A4be6",
+  explorerUrl: "https://explorer-studio.genlayer.com/address/0xFcf0d6c093470a008e2C9A6E1cE95698bC96Fe76",
   studioBase: "https://studio.genlayer.com/?import-contract=",
 };

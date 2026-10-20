@@ -14,7 +14,7 @@ import hashlib
 # multi-validator LLM consensus to establish verifiable on-chain truth.
 # ==============================================================================
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 
 # Supported claim domain categories
 CLAIM_TYPES = [
@@ -192,6 +192,9 @@ class GenState(gl.Contract):
     recipient_settled: TreeMap[str, u256]
     # v1.3.0: Failed-transfer recovery pull pattern
     pending_recoveries: TreeMap[str, u256]
+    # v1.4.0: 100% Race-free claim identification & duplicate-declaration protection
+    claims_by_request_id: TreeMap[str, str]
+    active_draft_declarations: TreeMap[str, str]
 
     def __init__(self):
         self.admin = gl.message.sender_address
@@ -275,8 +278,13 @@ class GenState(gl.Contract):
         predicate: str,
         asserted_value: str,
         reference_date: str,
+        request_id: str = "",
     ) -> str:
-        """Register a new structured state assertion in DRAFT status."""
+        """
+        Register a new structured state assertion in DRAFT status.
+        Supports optional client request_id for 100% race-free deterministic resolution.
+        If request_id is omitted, prevents concurrent identical declarations in DRAFT.
+        """
         c_type = claim_type.strip().upper()
         if c_type not in CLAIM_TYPES:
             raise gl.vm.UserError(
@@ -287,6 +295,7 @@ class GenState(gl.Contract):
         pred = predicate.strip()
         val = asserted_value.strip()
         ref_date = reference_date.strip()
+        req_id = request_id.strip()
 
         if len(subj) < 3 or len(subj) > 300:
             raise gl.vm.UserError("Subject must be between 3 and 300 characters")
@@ -297,18 +306,40 @@ class GenState(gl.Contract):
         if not _validate_date_string(ref_date):
             raise gl.vm.UserError("Reference date must be a valid date in YYYY-MM-DD format")
 
+        caller_str = _addr_str(gl.message.sender_address)
+
+        # 1. If unique request_id provided: enforce replay protection per creator
+        if req_id:
+            req_key = f"{caller_str}:{req_id}"
+            if req_key in self.claims_by_request_id:
+                raise gl.vm.UserError(
+                    f"Duplicate declaration request: request_id '{req_id}' has already been processed for this wallet"
+                )
+
+        # 2. If no request_id provided: prevent concurrent identical assertions in DRAFT
+        # so untagged declarations cannot be misidentified or race against each other
+        sig_key = f"{caller_str}:{c_type}:{subj}:{pred}:{val}:{ref_date}"
+        if not req_id:
+            if sig_key in self.active_draft_declarations:
+                existing_cid = self.active_draft_declarations[sig_key]
+                if existing_cid:
+                    raise gl.vm.UserError(
+                        f"Concurrent identical declaration rejected: claim '{existing_cid}' with identical fields is currently in DRAFT status for this wallet. Provide a unique request_id to declare independent concurrent assertions."
+                    )
+
         new_count = int(self.claim_count) + 1
         self.claim_count = u256(new_count)
         claim_id = f"CLAIM-{new_count}"
 
         claim_data = {
             "id": claim_id,
-            "creator": _addr_str(gl.message.sender_address),
+            "creator": caller_str,
             "claim_type": c_type,
             "subject": subj,
             "predicate": pred,
             "asserted_value": val,
             "reference_date": ref_date,
+            "request_id": req_id,
             "source_policy": "",
             "window_seconds": 0,
             "opened_at": 0,
@@ -329,6 +360,11 @@ class GenState(gl.Contract):
         self.claim_evidence_ids[claim_id] = json.dumps([])
         self.claim_funders[claim_id] = json.dumps([])
         self.bounties[claim_id] = u256(0)
+
+        if req_id:
+            self.claims_by_request_id[f"{caller_str}:{req_id}"] = claim_id
+        else:
+            self.active_draft_declarations[sig_key] = claim_id
 
         return claim_id
 
@@ -364,6 +400,11 @@ class GenState(gl.Contract):
         claim["opened_at"] = now_ts
         claim["evidence_deadline"] = now_ts + win_sec
         claim["status"] = STATE_EVIDENCE_OPEN
+
+        # Clean up untagged draft reservation if present
+        sig_key = f"{_addr_str(claim['creator'])}:{claim['claim_type']}:{claim['subject']}:{claim['predicate']}:{claim['asserted_value']}:{claim['reference_date']}"
+        if sig_key in self.active_draft_declarations and self.active_draft_declarations[sig_key] == claim_id:
+            self.active_draft_declarations[sig_key] = ""
 
         self._save_claim_dict(claim_id, claim)
         return claim_id
@@ -978,6 +1019,12 @@ You MUST respond strictly with a valid JSON object matching this schema:
 
         claim["bounty_amount"] = "0"
         claim["status"] = STATE_CANCELLED
+
+        # Clean up untagged draft reservation if present
+        sig_key = f"{_addr_str(claim['creator'])}:{claim['claim_type']}:{claim['subject']}:{claim['predicate']}:{claim['asserted_value']}:{claim['reference_date']}"
+        if sig_key in self.active_draft_declarations and self.active_draft_declarations[sig_key] == claim_id:
+            self.active_draft_declarations[sig_key] = ""
+
         self._save_claim_dict(claim_id, claim)
         return claim_id
 
@@ -1172,4 +1219,21 @@ You MUST respond strictly with a valid JSON object matching this schema:
             else u256(0)
         )
         return str(pending)
+
+    @gl.public.view
+    def get_claim_by_request_id(self, creator: Address, request_id: str) -> dict:
+        """
+        Deterministically queries claim by creator address and unique client request ID.
+        Guarantees 100% race-free resolution even if identical declarations are submitted.
+        """
+        c_addr = _addr_str(creator)
+        req = request_id.strip()
+        key = f"{c_addr}:{req}"
+        if key not in self.claims_by_request_id:
+            raise gl.vm.UserError(
+                f"No claim found for request_id '{request_id}' and creator '{c_addr}'"
+            )
+        claim_id = self.claims_by_request_id[key]
+        return self._get_claim_dict(claim_id)
+
 

@@ -849,3 +849,122 @@ def test_unsupported_conclusive_outcome_blocked_by_mirror_source_check(direct_vm
     assert "Unsupported conclusive outcome blocked" in claim["verdict_reason"]
     assert claim["qualifying_recipients"] == []
 
+
+# ==============================================================================
+# 5. 100% Race-Free Claim Identification & Anti-Race Declaration Tests
+# ==============================================================================
+
+def test_concurrent_identical_declarations_disambiguated_by_request_id(direct_vm, direct_deploy, direct_alice):
+    """
+    Steward Requirement (Oct 20, 2026):
+    Claim identification must be 100% race-free even for concurrent identical declarations
+    from the same wallet.
+    Verifies:
+    1. Alice submits two concurrent declarations with the EXACT same assertion parameters
+       (same claim_type, subject, predicate, asserted_value, and reference_date).
+    2. Each carries a distinct client request_id (REQ-1 and REQ-2).
+    3. Both succeed on-chain, creating CLAIM-1 and CLAIM-2 without error.
+    4. Deterministic query by request_id (get_claim_by_request_id) resolves each claim
+       unambiguously with zero misidentification.
+    """
+    direct_vm.warp("2026-10-20T10:00:00Z")
+    contract = deploy(direct_deploy)
+
+    direct_vm.sender = direct_alice
+
+    # Exact identical assertion parameters
+    claim_type = "FACTUAL_EVENT"
+    subject = "Bitcoin Block 1050000 Halving Event"
+    predicate = "block_subsidy_amount"
+    asserted_val = "1.5625 BTC"
+    ref_date = "2028-04-15"
+
+    # Transaction 1: Alice declares first instance with request_id="REQ-ALICE-CONCURRENT-001"
+    cid1 = contract.declare_claim(
+        claim_type, subject, predicate, asserted_val, ref_date, "REQ-ALICE-CONCURRENT-001"
+    )
+    assert cid1 == "CLAIM-1"
+
+    # Transaction 2: Alice declares concurrent identical instance with request_id="REQ-ALICE-CONCURRENT-002"
+    cid2 = contract.declare_claim(
+        claim_type, subject, predicate, asserted_val, ref_date, "REQ-ALICE-CONCURRENT-002"
+    )
+    assert cid2 == "CLAIM-2"
+
+    # Query by request_id for Tx 1: MUST return CLAIM-1, NEVER CLAIM-2
+    resolved_1 = contract.get_claim_by_request_id(direct_alice, "REQ-ALICE-CONCURRENT-001")
+    assert resolved_1["id"] == "CLAIM-1"
+    assert resolved_1["request_id"] == "REQ-ALICE-CONCURRENT-001"
+    assert resolved_1["subject"] == subject
+
+    # Query by request_id for Tx 2: MUST return CLAIM-2, NEVER CLAIM-1
+    resolved_2 = contract.get_claim_by_request_id(direct_alice, "REQ-ALICE-CONCURRENT-002")
+    assert resolved_2["id"] == "CLAIM-2"
+    assert resolved_2["request_id"] == "REQ-ALICE-CONCURRENT-002"
+    assert resolved_2["subject"] == subject
+
+    # Verify both exist independently in contract storage
+    all_claims = contract.list_claims(0, 10)
+    assert len(all_claims) == 2
+    assert all_claims[0]["id"] == "CLAIM-1"
+    assert all_claims[1]["id"] == "CLAIM-2"
+
+
+def test_duplicate_request_id_replay_rejected(direct_vm, direct_deploy, direct_alice):
+    """
+    Verifies that reusing the same request_id from the same wallet reverts,
+    providing complete idempotency and replay protection.
+    """
+    direct_vm.warp("2026-10-20T10:00:00Z")
+    contract = deploy(direct_deploy)
+
+    direct_vm.sender = direct_alice
+
+    # Initial declaration with unique request_id
+    contract.declare_claim(
+        "REGISTRY_RECORD", "Entity Registration", "status", "ACTIVE", "2026-01-01", "REQ-IDEMP-001"
+    )
+
+    # Replay attempt with same request_id -> must revert
+    with pytest.raises(Exception) as exc_info:
+        contract.declare_claim(
+            "REGISTRY_RECORD", "Different Subject", "status", "ACTIVE", "2026-01-01", "REQ-IDEMP-001"
+        )
+    assert "Duplicate declaration request: request_id 'REQ-IDEMP-001' has already been processed" in str(exc_info.value)
+
+
+def test_concurrent_identical_declarations_without_request_id_prevent_race(direct_vm, direct_deploy, direct_alice):
+    """
+    Verifies that when request_id is omitted (legacy callers), the contract strictly rejects
+    concurrent duplicate identical declarations in DRAFT from the same wallet.
+    Prevents silent race conditions where two identical untagged claims could be misidentified.
+    """
+    direct_vm.warp("2026-10-20T10:00:00Z")
+    contract = deploy(direct_deploy)
+
+    direct_vm.sender = direct_alice
+
+    # 1. First untagged declaration in DRAFT
+    cid1 = contract.declare_claim(
+        "FACTUAL_EVENT", "Identical Assertion", "status", "CONFIRMED", "2026-01-01"
+    )
+    assert cid1 == "CLAIM-1"
+
+    # 2. Immediate duplicate untagged declaration from Alice while CLAIM-1 is still in DRAFT -> MUST revert
+    with pytest.raises(Exception) as exc_info:
+        contract.declare_claim(
+            "FACTUAL_EVENT", "Identical Assertion", "status", "CONFIRMED", "2026-01-01"
+        )
+    assert "Concurrent identical declaration rejected" in str(exc_info.value)
+    assert "is currently in DRAFT status for this wallet" in str(exc_info.value)
+
+    # 3. Once CLAIM-1 transitions out of DRAFT (e.g. frozen), the reservation is released
+    contract.freeze_claim(cid1, "OPEN_PUBLIC", 300)
+
+    # Now Alice can declare the same statement again without conflict
+    cid2 = contract.declare_claim(
+        "FACTUAL_EVENT", "Identical Assertion", "status", "CONFIRMED", "2026-01-01"
+    )
+    assert cid2 == "CLAIM-2"
+
+

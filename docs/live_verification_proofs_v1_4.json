@@ -1,0 +1,54 @@
+{
+  "contract_address": "0xFcf0d6c093470a008e2C9A6E1cE95698bC96Fe76",
+  "chain_id": 61999,
+  "version": "1.4.0",
+  "transactions": {
+    "declare_claim_a": "0x047a1c776faa33dfafae14a18e49d3b32be1e01e0f3deca84cd084541dd81b02",
+    "declare_claim_b": "0xd1928c6288a14a3a35d75b6926bc5baf6426d7ade845bae85893b9f8f01a176d",
+    "fund_bounty_alice": "0xf74b6217b323c5ef40e38cc0e95ae61c3ddb3d4af4d80ac978b9d930d8228622",
+    "fund_bounty_bob": "0x2084c88a1d733a84b1e041019d0228fc71604f12c35a8d6351a4974f832a65ff",
+    "freeze_claim_a": "0x9796d2502a55fa0fb086007163daed85974017fc4187b0395d8c13f74237605f",
+    "submit_evidence_charlie": "0x0b3a7308d9adeedf5b7550be9159767e22a9b475b7dbf17929c718cdc4236532",
+    "adjudicate_claim_a": "0x4431e332d4dcc609f5f8fe5e94764ec75148845a808efe3dd94a8bd454ff1322",
+    "settle_bounty_charlie": "0x1fc848a062eb4fac463669033cb86d6c8c77d63c9979deed9a38d3fc628cc4c3",
+    "fund_claim_b_alice": "0xf45ec9a532787b61798e452c91ebd5d8b30291d0babc384957ccdc02cc93bf57",
+    "fund_claim_b_bob": "0xcd926d8fb095a59de770bc6208bf345326c6c999ce069310eaff29a5e68da18c",
+    "cancel_claim_b": "0xef1d008445f76ed1ccbe4937413bbe75925cafb06b650523c4cb87bb599cbff6"
+  },
+  "balance_proofs": {
+    "settlement_payout_charlie": {
+      "recipient": "0x691Cb1645a4f21D879973b3A3B98A714fC1970D6",
+      "pre_balance": "1000000000000000000",
+      "post_balance": "1300000000000000000",
+      "increase": "300000000000000000"
+    },
+    "cancellation_refunds": {
+      "alice_refund_wei": "150000000000000000",
+      "bob_refund_wei": "100000000000000000"
+    }
+  },
+  "race_free_proofs": {
+    "concurrent_disambiguation": {
+      "assertion": [
+        "FACTUAL_EVENT",
+        "RFC 2606 Example Domain Reservation",
+        "reservation_purpose",
+        "documentation and testing examples",
+        "2026-01-01"
+      ],
+      "caller": "0xd2431CA38735C2fd438e2cAa23F094191D89675b",
+      "claim_a": {
+        "tx_hash": "0x047a1c776faa33dfafae14a18e49d3b32be1e01e0f3deca84cd084541dd81b02",
+        "request_id": "REQ-ALICE-CONCURRENT-1792467234-A",
+        "resolved_id": "CLAIM-3"
+      },
+      "claim_b": {
+        "tx_hash": "0xd1928c6288a14a3a35d75b6926bc5baf6426d7ade845bae85893b9f8f01a176d",
+        "request_id": "REQ-ALICE-CONCURRENT-1792467234-B",
+        "resolved_id": "CLAIM-4"
+      },
+      "status": "VERIFIED_100_PERCENT_RACE_FREE"
+    }
+  },
+  "steward_verifications": {}
+}

@@ -38,6 +38,7 @@ export interface StateClaim {
   predicate: string;
   asserted_value: string;
   reference_date: string;
+  request_id?: string;
   source_policy: AdmissibilityPolicy | string;
   window_seconds: number;
   opened_at?: number;

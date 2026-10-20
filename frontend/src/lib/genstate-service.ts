@@ -463,23 +463,35 @@ class LiveGenStateService {
 
   /**
    * Deterministically extract a return value matching "CLAIM-X" from a transaction receipt.
-   * Scans receipt returnValue, result, returnData, leaderReceipts, and nested properties.
+   * Scans receipt returnValue, result, returnData, leaderReceipts, payload readable, and nested properties.
+   * Handles JSON unquoting and nested execution result structures.
    */
   private extractClaimIdFromReceipt(receipt: any): string {
     if (!receipt) return "";
 
+    const cleanCandidate = (val: any): string => {
+      if (typeof val !== "string") return "";
+      let s = val.trim();
+      // Unquote if JSON stringified like "\"CLAIM-1\""
+      if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+        s = s.slice(1, -1).trim();
+      }
+      if (/^CLAIM-\d+$/.test(s)) return s;
+      const m = s.match(/CLAIM-\d+/);
+      return m ? m[0] : "";
+    };
+
     // 1. Direct string return value
-    if (typeof receipt.returnValue === "string" && receipt.returnValue.trim().startsWith("CLAIM-")) {
-      return receipt.returnValue.trim();
-    }
-    // 2. Direct result string
-    if (typeof receipt.result === "string" && receipt.result.trim().startsWith("CLAIM-")) {
-      return receipt.result.trim();
-    }
-    // 3. Direct returnData string
-    if (typeof receipt.returnData === "string" && receipt.returnData.trim().startsWith("CLAIM-")) {
-      return receipt.returnData.trim();
-    }
+    const fromReturnVal = cleanCandidate(receipt.returnValue);
+    if (fromReturnVal) return fromReturnVal;
+
+    // 2. Direct result
+    const fromResult = cleanCandidate(receipt.result);
+    if (fromResult) return fromResult;
+
+    // 3. Direct returnData
+    const fromReturnData = cleanCandidate(receipt.returnData);
+    if (fromReturnData) return fromReturnData;
 
     // 4. Check consensus_data.leader_receipt entries
     const leaderReceiptRaw = receipt.consensus_data?.leader_receipt;
@@ -490,22 +502,28 @@ class LiveGenStateService {
         : [];
 
     for (const lr of leaderReceipts) {
-      if (typeof lr?.result === "string" && lr.result.trim().startsWith("CLAIM-")) {
-        return lr.result.trim();
-      }
-      if (typeof lr?.genvm_result === "string" && lr.genvm_result.trim().startsWith("CLAIM-")) {
-        return lr.genvm_result.trim();
-      }
-      if (typeof lr?.return_value === "string" && lr.return_value.trim().startsWith("CLAIM-")) {
-        return lr.return_value.trim();
-      }
+      const fromLrResult = cleanCandidate(lr?.result);
+      if (fromLrResult) return fromLrResult;
+
+      const fromLrPayloadReadable = cleanCandidate(lr?.result?.payload?.readable);
+      if (fromLrPayloadReadable) return fromLrPayloadReadable;
+
+      const fromLrPayload = cleanCandidate(lr?.result?.payload);
+      if (fromLrPayload) return fromLrPayload;
+
+      const fromGenvmResult = cleanCandidate(lr?.genvm_result);
+      if (fromGenvmResult) return fromGenvmResult;
+
+      const fromReturnValue = cleanCandidate(lr?.return_value);
+      if (fromReturnValue) return fromReturnValue;
     }
 
-    // 5. Recursive search across receipt properties matching /^CLAIM-\d+$/
+    // 5. Recursive search across all receipt properties
     const findClaimPattern = (obj: any, depth = 0): string => {
-      if (!obj || depth > 5) return "";
-      if (typeof obj === "string" && /^CLAIM-\d+$/.test(obj.trim())) {
-        return obj.trim();
+      if (!obj || depth > 6) return "";
+      if (typeof obj === "string") {
+        const c = cleanCandidate(obj);
+        if (c) return c;
       }
       if (typeof obj === "object") {
         for (const k of Object.keys(obj)) {
@@ -521,16 +539,19 @@ class LiveGenStateService {
 
   /**
    * Broadcast real on-chain transaction: declare_claim.
-   * Deterministically resolves created claim without ANY race-prone global counter fallback.
-   * Extracts directly from receipt, or queries the contract matching the caller and exact asserted parameters.
+   * 100% race-free deterministic resolution:
+   * Generates a cryptographically unique request_id passed to the contract.
+   * If not directly exposed in receipt, queries the contract by caller address and exact unique request_id.
+   * NEVER falls back to non-unique fields or selects the newest matching claim.
    */
   public async declareClaim(
     claimType: string,
     subject: string,
     predicate: string,
     assertedValue: string,
-    referenceDate: string
-  ): Promise<{ txHash: string; claimId: string }> {
+    referenceDate: string,
+    clientRequestId?: string
+  ): Promise<{ txHash: string; claimId: string; requestId: string }> {
     this.requireConnectedClient();
     await this.assertCorrectNetwork();
     await this.ensureBalance();
@@ -541,10 +562,18 @@ class LiveGenStateService {
     const normReferenceDate = referenceDate.trim();
     const normClaimType = claimType.trim().toUpperCase();
 
+    // Generate cryptographically unique, collision-free client request ID
+    const randomSuffix =
+      typeof crypto !== "undefined" && typeof (crypto as any).randomUUID === "function"
+        ? (crypto as any).randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+    const requestId =
+      (clientRequestId && clientRequestId.trim()) || `REQ-${Date.now()}-${randomSuffix}`;
+
     const txHash = await this.client.writeContract({
       address: GENSTATE_CONFIG.contractAddress,
       functionName: "declare_claim",
-      args: [normClaimType, normSubject, normPredicate, normAssertedValue, normReferenceDate],
+      args: [normClaimType, normSubject, normPredicate, normAssertedValue, normReferenceDate, requestId],
     });
 
     const receipt = await this.waitForFinalizedSuccess(txHash);
@@ -553,44 +582,49 @@ class LiveGenStateService {
     let claimId = this.extractClaimIdFromReceipt(receipt);
 
     // 2. Second: If not directly exposed in receipt, query contract deterministically
-    // by matching the caller's address AND this transaction's exact unique claim parameters.
-    // NEVER fall back to global claim counter.
+    // by caller address and exact unique request_id.
+    // NEVER selects newest claim matching non-unique fields to prevent concurrent misidentification races.
     if (!claimId) {
-      const callerAddr = (this.account?.address || this.browserAddress || "").toLowerCase();
-      // Retry up to 3 times with brief backoff for state propagation
-      for (let attempt = 0; attempt < 3 && !claimId; attempt++) {
+      const callerAddr = this.account?.address || this.browserAddress || "";
+      for (let attempt = 0; attempt < 4 && !claimId; attempt++) {
         if (attempt > 0) {
           await new Promise((resolve) => setTimeout(resolve, 1500));
         }
-        // Fetch up to 50 most recent claims
-        const allClaims = await this.fetchClaims(0, 50);
-        // Find exact match from newest to oldest
-        const matched = allClaims.slice().reverse().find((c) => {
-          const matchCreator = callerAddr ? c.creator.toLowerCase() === callerAddr : true;
-          return (
-            matchCreator &&
-            c.claim_type === normClaimType &&
-            c.subject === normSubject &&
-            c.predicate === normPredicate &&
-            c.asserted_value === normAssertedValue &&
-            c.reference_date === normReferenceDate &&
-            c.status === "DRAFT"
-          );
-        });
 
-        if (matched && matched.id && matched.id.startsWith("CLAIM-")) {
-          claimId = matched.id;
+        try {
+          // Dedicated view query matching caller and exact unique request_id
+          const claimRecord = await this.readClient.readContract({
+            address: GENSTATE_CONFIG.contractAddress,
+            functionName: "get_claim_by_request_id",
+            args: [callerAddr, requestId],
+          });
+          if (claimRecord && claimRecord.id && claimRecord.id.startsWith("CLAIM-")) {
+            claimId = claimRecord.id;
+            break;
+          }
+        } catch {
+          // If contract method read has latency or state is propagating, fallback to list check
+        }
+
+        if (!claimId) {
+          // Fetch claims and match strictly on unique request_id
+          const allClaims = await this.fetchClaims(0, 50);
+          const matched = allClaims.find((c) => (c as any).request_id === requestId);
+          if (matched && matched.id && matched.id.startsWith("CLAIM-")) {
+            claimId = matched.id;
+            break;
+          }
         }
       }
     }
 
     if (!claimId) {
       throw new Error(
-        `Transaction ${txHash} confirmed on-chain, but the created claim ID could not be deterministically matched to your wallet's declared parameters. Never guessing from global counters to prevent race conditions.`
+        `Transaction ${txHash} confirmed on-chain, but the created claim ID could not be matched to unique request ID '${requestId}'. Never guessing from global counters or non-unique fields to prevent race conditions.`
       );
     }
 
-    return { txHash, claimId };
+    return { txHash, claimId, requestId };
   }
 
   /**
